@@ -195,7 +195,15 @@ export async function fetchEventDigest(
 }
 
 export async function fetchSecurityEvents(
-  params: { kind?: string | null; actor?: string | null; since?: string | null; limit?: number; offset?: number },
+  params: {
+    kind?: string | null
+    actor?: string | null
+    since?: string | null
+    limit?: number
+    offset?: number
+    /** What admins did, and nothing members did. */
+    adminOnly?: boolean
+  },
   signal: AbortSignal,
 ): Promise<Page<AdminEventRow>> {
   const limit = params.limit ?? 50
@@ -208,6 +216,7 @@ export async function fetchSecurityEvents(
       p_actor: params.actor || null,
       p_limit: limit,
       p_offset: offset,
+      p_admin_only: params.adminOnly ?? false,
     })
     .abortSignal(signal)
 

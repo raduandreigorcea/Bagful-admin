@@ -184,3 +184,23 @@ describe('UserId', () => {
     wrapper.unmount()
   })
 })
+
+describe('EventDetail', () => {
+  it('puts a hover card on every Clerk id in an event, and nowhere else', async () => {
+    const EventDetail = (await import('../src/components/EventDetail.vue')).default as unknown as Component
+    const w = mount(EventDetail, {
+      props: { detail: { role: 'member', self: false, target: 'user_3D7fKKF1I9xyLOo7JxtSKW5N3WE' } },
+      global: { stubs },
+    })
+    expect(w.findAll('.hover')).toHaveLength(1)
+    expect(w.text()).toContain('role: member')
+    expect(w.text()).toContain('self: false')
+    expect(w.text()).not.toContain('{')
+  })
+
+  it('falls back to JSON for a detail that is not an object', async () => {
+    const EventDetail = (await import('../src/components/EventDetail.vue')).default as unknown as Component
+    const w = mount(EventDetail, { props: { detail: ['a', 'b'] }, global: { stubs } })
+    expect(w.text()).toBe('["a","b"]')
+  })
+})

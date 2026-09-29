@@ -53,7 +53,10 @@ const stubs = {
   StatusPill: { props: ['label'], template: '<span class="pill">{{ label }}</span>' },
   DataTable: { template: '<table><slot /></table>' },
   TablePager: { template: '<div />' },
-  SelectField: { template: '<select />' },
+  SelectField: {
+    props: ['label', 'options'],
+    template: `<select :data-label="label" :data-options="(options || []).map((o) => o.label).join('|')" />`,
+  },
   SegmentedControl: { template: '<div />' },
   CopyValue: { props: ['value'], template: '<code>{{ value }}</code>' },
   UserChip: { template: '<div />' },
@@ -186,15 +189,21 @@ describe('where the banner takes you', () => {
     wrapper.unmount()
   })
 
-  it('takes failed events to the events panel on this page', async () => {
+  // The events panel lists admin actions only, so failed member events are a
+  // count in the banner with nowhere below to point at.
+  it('counts failed events in the banner without pointing at the admin events panel', async () => {
     state.digest = [{ kind: 'rpc_denied', events: 3, distinct_actors: 1, first_seen: '', last_seen: '' }]
-    const wrapper = await mountPage({ attachTo: document.body })
-    const panel = document.getElementById('health-events')!
-    const scrolled = vi.fn()
-    panel.scrollIntoView = scrolled
-    const button = wrapper.findAll('.status button').find((b) => b.text().includes('failed or denied'))!
-    await button.trigger('click')
-    expect(scrolled).toHaveBeenCalled()
-    wrapper.unmount()
+    const wrapper = await mountPage()
+    expect(wrapper.find('.status').text()).toContain('3 failed or denied events')
+    expect(wrapper.findAll('.status button').some((b) => b.text().includes('failed or denied'))).toBe(false)
+  })
+
+  it('offers only admin kinds in the events filter', async () => {
+    state.digest = [
+      { kind: 'rpc_denied', events: 3, distinct_actors: 1, first_seen: '', last_seen: '' },
+      { kind: 'admin_user_banned', events: 1, distinct_actors: 1, first_seen: '', last_seen: '' },
+    ]
+    const wrapper = await mountPage()
+    expect(wrapper.find('select[data-label="Kind"]').attributes('data-options')).toBe('Every kind|Admin user banned (1)')
   })
 })

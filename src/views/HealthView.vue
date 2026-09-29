@@ -7,6 +7,8 @@ import PanelCard from '../components/PanelCard.vue'
 import StatTile from '../components/StatTile.vue'
 import StateBlock from '../components/StateBlock.vue'
 import StatusPill from '../components/StatusPill.vue'
+import EventDetail from '../components/EventDetail.vue'
+import UserId from '../components/UserId.vue'
 import DataTable from '../components/DataTable.vue'
 import TablePager from '../components/TablePager.vue'
 import SelectField from '../components/SelectField.vue'
@@ -79,6 +81,10 @@ const events = useQuery(
       {
         kind: eventKind.value,
         since: sinceIso(range.value),
+        // Admin actions only. What members do is theirs, and at a million users
+        // an audit trail of it is a firehose nobody reads; the failures among
+        // it still reach the banner as a count, from the digest.
+        adminOnly: true,
         limit: LIMIT,
         offset: eventOffset.value,
       },
@@ -118,7 +124,6 @@ type Issue = { tone: 'bad' | 'warn'; text: string; to?: string; href?: string; a
 
 /** The panels a sentence can point at, further down this page. */
 const CONNECTION_PANEL = 'health-connection'
-const EVENTS_PANEL = 'health-events'
 
 /**
  * Scroll to a panel on this page. A button rather than an anchor: the router's
@@ -247,7 +252,7 @@ function isExternal(href: string | undefined): boolean {
 
 const kindOptions = computed(() => [
   { value: null, label: 'Every kind' },
-  ...(digest.data.value ?? []).map((row) => ({
+  ...(digest.data.value ?? []).filter((row) => row.kind.startsWith('admin_')).map((row) => ({
     value: row.kind,
     label: `${humanizeKind(row.kind)} (${row.events})`,
   })),
@@ -314,9 +319,6 @@ watch(
 
 const errorEvents = computed(
   () => (digest.data.value ?? []).filter((row) => severityOf(row.kind) === 'error').reduce((sum, r) => sum + r.events, 0),
-)
-const warnEvents = computed(
-  () => (digest.data.value ?? []).filter((row) => severityOf(row.kind) === 'warn').reduce((sum, r) => sum + r.events, 0),
 )
 
 const slowest = computed(() => {
@@ -409,7 +411,6 @@ const issues = computed<Issue[]>(() => {
     out.push({
       tone: 'warn',
       text: `${formatCount(n)} failed or denied ${n === 1 ? 'event' : 'events'} in the last ${range.value.label}`,
-      anchor: EVENTS_PANEL,
     })
   }
   return out
@@ -627,9 +628,8 @@ const allClear = computed(() =>
     </div>
 
     <PanelCard
-      :id="EVENTS_PANEL"
-      title="Recent events"
-      :note="`The audit trail: ${formatCount(errorEvents)} errors and ${formatCount(warnEvents)} warnings in the last ${range.label}.`"
+      title="Recent admin events"
+      note="What admins did here: bans, restores, grants, catalog edits."
       :busy="refreshing(events)"
       flush
     >
@@ -674,7 +674,7 @@ const allClear = computed(() =>
           <span v-else class="u-muted">--</span>
         </template>
         <template #cell-detail="{ row }">
-          <code class="detail u-mono u-truncate">{{ JSON.stringify(row.detail) }}</code>
+          <EventDetail :detail="row.detail" />
         </template>
         <template #cell-created_at="{ row }">
           <span :title="formatDateTime(String(row.created_at))">
@@ -765,6 +765,11 @@ const allClear = computed(() =>
                 :src="row.actor_image_url ? String(row.actor_image_url) : null"
                 :size="20"
               />
+              <!-- An account with no profile here is still an account: the card
+                   says so. A throttling key is not, and stays a bare value. -->
+              <UserId v-else-if="String(row.actor).startsWith('user_')" :id="String(row.actor)" wraps>
+                <CopyValue :value="String(row.actor)" label="actor" />
+              </UserId>
               <CopyValue v-else :value="String(row.actor)" label="actor" />
             </template>
             <template #cell-window_start="{ row }">
@@ -774,7 +779,7 @@ const allClear = computed(() =>
             </template>
           </DataTable>
 
-          <!-- Always drawn, like Recent events: "1–1 of 1" says this is the whole
+          <!-- Always drawn, like Recent admin events: "1–1 of 1" says this is the whole
                table, where a lone row with no foot reads as something cut off. -->
           <template #footer>
             <TablePager
@@ -1046,12 +1051,6 @@ a.check__detail:hover {
 .dead--high {
   color: var(--warning-text);
   font-weight: var(--weight-semibold);
-}
-
-.detail {
-  font-size: var(--text-2xs);
-  color: var(--text-secondary);
-  display: block;
 }
 
 .link {
