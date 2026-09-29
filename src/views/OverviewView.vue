@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import UserChip from '../components/UserChip.vue'
 import PageHeader from '../components/PageHeader.vue'
 import PanelCard from '../components/PanelCard.vue'
 import StatTile from '../components/StatTile.vue'
@@ -9,7 +8,6 @@ import LineChart from '../components/LineChart.vue'
 import type { Series } from '../lib/uiTypes'
 import BarChart from '../components/BarChart.vue'
 import StateBlock from '../components/StateBlock.vue'
-import StatusPill from '../components/StatusPill.vue'
 import SegmentedControl from '../components/SegmentedControl.vue'
 import { useQuery, useQueryGroup, describeError } from '../lib/useQuery'
 import {
@@ -17,15 +15,14 @@ import {
   fetchActivitySeries,
   fetchOverview,
   fetchCumulativeWindow,
-  fetchRecentActivity,
   searchVolume,
 } from '../lib/data/overview'
 import { probeProjects } from '../lib/data/health'
 import { DEFAULT_RANGE, TIME_RANGES, bucketLabel, resolveRange } from '../lib/timeRange'
-import { formatCompact, formatCount, formatDateTime, formatRelative, humanizeKind } from '../lib/format'
+import { formatCompact, formatCount } from '../lib/format'
 
 // The landing screen. Totals that ignore the range, a window that respects it,
-// the shape of activity over time, and what just happened.
+// and the shape of activity over time.
 
 const rangeKey = ref<string>(DEFAULT_RANGE)
 const range = computed(() => resolveRange(rangeKey.value))
@@ -36,12 +33,11 @@ const cumulative = useQuery((signal) => fetchCumulativeWindow(range.value, signa
   watch: [range],
 })
 const series = useQuery((signal) => fetchActivitySeries(range.value, signal), { watch: [range] })
-const activity = useQuery((signal) => fetchRecentActivity(25, signal))
 const probes = useQuery((signal) => probeProjects(signal))
 
-// All five. `busy` used to watch three of them, so the spinner stopped while
+// All four. `busy` used to watch three of them, so the spinner stopped while
 // the delta and the probes were still in flight.
-const page = useQueryGroup([overview, cumulative, series, activity, probes])
+const page = useQueryGroup([overview, cumulative, series, probes])
 
 const rangeSegments = TIME_RANGES.map((r) => ({
   value: r.key,
@@ -99,35 +95,6 @@ const membershipSpread = computed(() =>
 const searches = searchVolume(DEFAULT_RANGE)
 
 const overviewError = computed(() => describeError(overview.error.value))
-
-/** Recent-activity rows get a tone so the feed can be scanned rather than read. */
-function toneOf(kind: string): 'good' | 'warn' | 'bad' | 'idle' | 'accent' {
-  if (kind === 'security_event') return 'warn'
-  if (kind === 'checkout') return 'good'
-  if (kind === 'list_created' || kind === 'member_joined') return 'accent'
-  return 'idle'
-}
-
-function describeRow(row: { kind: string; subject: string | null; detail: Record<string, unknown> }): string {
-  switch (row.kind) {
-    case 'checkout':
-      return `Bought ${row.detail.items ?? '?'} item${row.detail.items === 1 ? '' : 's'}`
-    case 'member_joined':
-      return `Joined as ${row.detail.role ?? 'member'}`
-    case 'list_created':
-      return `Created ${row.subject ?? 'a list'}`
-    case 'item_added':
-      return `Added ${row.subject ?? 'an item'}`
-    case 'item_checked':
-      return `Checked off ${row.subject ?? 'an item'}`
-    case 'product_contributed':
-      return `Contributed ${row.subject ?? 'a product'}`
-    case 'security_event':
-      return humanizeKind(row.subject)
-    default:
-      return humanizeKind(row.kind)
-  }
-}
 </script>
 
 <template>
@@ -213,7 +180,7 @@ function describeRow(row: { kind: string; subject: string | null; detail: Record
       </div>
 
       <div class="grid">
-        <div class="span-8">
+        <div class="span-12">
           <PanelCard
             title="Activity"
             :note="`Counted per ${range.bucket}. Empty buckets are drawn, not skipped.`"
@@ -226,55 +193,19 @@ function describeRow(row: { kind: string; subject: string | null; detail: Record
               title="Could not load the series"
               :message="series.error.value.message"
             />
+            <!-- The chart scales with its width and keeps its proportions, so
+                 across the full row a shorter viewBox is what keeps it about as
+                 tall as it was at two thirds of the row. -->
             <LineChart
               v-else
               :series="activitySeries"
               :labels="chartLabels"
-              :height="260"
+              :height="175"
               :format="formatCompact"
             />
           </PanelCard>
         </div>
 
-        <div class="span-4">
-          <PanelCard title="Recent activity" note="Across every list, newest first." fill flush>
-            <StateBlock v-if="activity.loading.value" state="loading" :lines="6" />
-            <StateBlock
-              v-else-if="activity.error.value"
-              state="error"
-              title="Could not load activity"
-              :message="activity.error.value.message"
-            />
-            <StateBlock
-              v-else-if="!activity.data.value?.length"
-              state="empty"
-              title="Nothing yet"
-              message="No lists have been created and no items have been touched on this database."
-            />
-            <ul v-else class="feed">
-              <li v-for="(row, index) in activity.data.value" :key="`${row.kind}-${row.occurred_at}-${index}`" class="feed__row">
-                <StatusPill :tone="toneOf(row.kind)" :label="humanizeKind(row.kind)" />
-                <div class="feed__body">
-                  <span class="feed__what u-truncate">{{ describeRow(row) }}</span>
-                  <span class="feed__who">
-                    <UserChip
-                      :id="row.actor"
-                      :name="row.actor_name"
-                      :src="row.actor_image_url"
-                      :size="16"
-                    />
-                    <span v-if="row.list_name" class="feed__where u-truncate">
-                      · {{ row.list_name }}
-                    </span>
-                  </span>
-                </div>
-                <time class="feed__when" :title="formatDateTime(row.occurred_at)">
-                  {{ formatRelative(row.occurred_at) }}
-                </time>
-              </li>
-            </ul>
-          </PanelCard>
-        </div>
       </div>
 
       <div class="grid">
@@ -345,38 +276,6 @@ function describeRow(row: { kind: string; subject: string | null; detail: Record
 </template>
 
 <style scoped>
-.feed {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 330px;
-  overflow-y: auto;
-}
-
-.feed__row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border-bottom: var(--border-width-thin) solid var(--border-light);
-}
-
-.feed__row:last-child {
-  border-bottom: none;
-}
-
-.feed__body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  line-height: var(--leading-snug);
-}
-
-.feed__what {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-}
 
 /* A flex row, not a run of text with a chip dropped into it.
  *
@@ -386,24 +285,6 @@ function describeRow(row: { kind: string; subject: string | null; detail: Record
  * it, at the same size. Making both of them flex items centres them on each
  * other instead, and at one font size that is the same thing as sharing a
  * baseline. Any line that puts a chip beside loose text needs this. */
-.feed__who {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: 0;
-  font-size: var(--text-2xs);
-  color: var(--text-disabled);
-}
-
-.feed__where {
-  min-width: 0;
-}
-
-.feed__when {
-  font-size: var(--text-2xs);
-  color: var(--text-disabled);
-  white-space: nowrap;
-}
 
 .system {
   display: flex;

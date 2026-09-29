@@ -144,18 +144,6 @@ export interface ActivityBucket {
   active_users: number
 }
 
-export interface RecentActivityRow {
-  kind: string
-  occurred_at: string
-  actor: string | null
-  actor_name: string | null
-  actor_image_url: string | null
-  list_id: string | null
-  list_name: string | null
-  subject: string | null
-  detail: Record<string, unknown>
-}
-
 export interface OverviewTotals {
   users: number
   lists: number

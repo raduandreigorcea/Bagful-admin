@@ -8,7 +8,6 @@ import {
   type Metric,
   type OverviewPayload,
   type OverviewWindow,
-  type RecentActivityRow,
 } from './types'
 
 // The overview screen's data, and the one place a period-over-period delta is
@@ -83,17 +82,6 @@ export async function fetchActivitySeries(
     .abortSignal(signal)
   if (error) queryError('admin_activity_series', error)
   return (data ?? []) as ActivityBucket[]
-}
-
-export async function fetchRecentActivity(
-  limit: number,
-  signal: AbortSignal,
-): Promise<RecentActivityRow[]> {
-  const { data, error } = await db()
-    .rpc('admin_recent_activity', { p_limit: limit })
-    .abortSignal(signal)
-  if (error) queryError('admin_recent_activity', error)
-  return (data ?? []) as RecentActivityRow[]
 }
 
 // ─── the one overview tile that has no data behind it ────────────────────────

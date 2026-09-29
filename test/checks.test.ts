@@ -196,11 +196,13 @@ describe('checkServices', () => {
       clerk: async () => {
         throw new Error('admin-services/clerk: HTTP 502')
       },
+      posthog: async () => ({ channel: 'production', days: [], counts: {} }),
     })
     expect(checks.map((c) => [c.label, c.tone])).toEqual([
       ['Sentry', 'good'],
       ['OneSignal', 'bad'],
       ['Clerk', 'bad'],
+      ['PostHog', 'good'],
     ])
     expect(checks[1].detail).toContain('ONESIGNAL_APP_ID')
     expect(checks[2].detail).toContain('502')

@@ -9,6 +9,7 @@ import PanelCard from '../components/PanelCard.vue'
 import StatTile from '../components/StatTile.vue'
 import StateBlock from '../components/StateBlock.vue'
 import StatusPill from '../components/StatusPill.vue'
+import EventDetail from '../components/EventDetail.vue'
 import BarChart from '../components/BarChart.vue'
 import CopyValue from '../components/CopyValue.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -371,7 +372,7 @@ const membershipNote = computed(() => {
               :tone="/failed|denied/.test(event.kind) ? 'bad' : /rate_limit|removed/.test(event.kind) ? 'warn' : 'idle'"
               :label="humanizeKind(event.kind)"
             />
-            <code class="events__detail u-mono u-truncate">{{ JSON.stringify(event.detail) }}</code>
+            <EventDetail class="events__detail" :detail="event.detail" />
             <time class="events__when" :title="formatDateTime(event.created_at)">
               {{ formatRelative(event.created_at) }}
             </time>
@@ -610,8 +611,6 @@ const membershipNote = computed(() => {
 }
 
 .events__detail {
-  font-size: var(--text-2xs);
-  color: var(--text-secondary);
   min-width: 0;
 }
 

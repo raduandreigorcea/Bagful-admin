@@ -78,6 +78,7 @@ const groups: { heading: string; items: NavItem[] }[] = [
     items: [
       { to: '/services/sentry', label: 'Sentry', icon: 'brand-sentry', title: 'Errors the app reported, and feedback people sent, archived included' },
       { to: '/services/onesignal', label: 'OneSignal', icon: 'brand-onesignal', title: 'Push notifications sent, and how many arrived' },
+      { to: '/services/posthog', label: 'PostHog', icon: 'brand-posthog', title: 'What people do in the app, counted per day' },
       { to: '/services/clerk', label: 'Clerk', icon: 'brand-clerk', title: 'Accounts in the sign-in service and how they sign in' },
     ],
   },
