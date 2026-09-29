@@ -66,7 +66,9 @@ const name = ref('')
 const brand = ref('')
 const category = ref('')
 const barcode = ref('')
-const quantity = ref('')
+// v-model on a type="number" input gives back a number once something is
+// typed, and '' when it is empty. Read through String() before trimming.
+const quantity = ref<string | number>('')
 const quantityUnit = ref('')
 
 const editing = computed(() => props.product !== null)
@@ -105,7 +107,7 @@ function submit() {
     brand: brand.value.trim() || null,
     category: editing.value ? category.value.trim() : category.value.trim() || null,
     barcode: editing.value ? barcode.value.trim() : barcode.value.trim() || null,
-    quantity: quantity.value.trim() ? Number(quantity.value.trim()) : null,
+    quantity: String(quantity.value).trim() ? Number(quantity.value) : null,
     quantityUnit: editing.value ? quantityUnit.value : quantityUnit.value || null,
   })
 }
@@ -186,7 +188,18 @@ useModal({
 
           <label class="cf__field">
             <span class="cf__label">Barcode</span>
-            <input v-model="barcode" class="cf__input" type="text" inputmode="numeric" :disabled="busy" />
+            <!-- The browser refuses a short code at submit, next to the field, rather
+                 than the RPC refusing it in a line under the buttons that is easy
+                 to miss. Same rule as catalog_admin_create_product. -->
+            <input
+              v-model="barcode"
+              class="cf__input"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]{8,14}"
+              title="8 to 14 digits"
+              :disabled="busy"
+            />
             <span class="cf__hint">
               8 to 14 digits, and a scan resolves through this and nothing else. A code another
               product already claims is refused; emptying it makes this one unscannable.

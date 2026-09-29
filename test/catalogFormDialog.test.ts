@@ -137,4 +137,25 @@ describe('CatalogFormDialog', () => {
     await wrapper.find('form').trigger('submit')
     expect(wrapper.emitted('submit')).toBeUndefined()
   })
+
+  // A typed quantity used to crash the dialog: v-model on type="number" hands
+  // back a number, not the string the form started from, and submit called
+  // .trim() on it.
+  it('submits a quantity that was typed into the field', async () => {
+    const wrapper = mountDialog(product())
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('input[type="number"]').setValue('750')
+    await wrapper.find('form').trigger('submit')
+
+    expect(submitted(wrapper)).toMatchObject({ quantity: 750 })
+  })
+
+  // The RPC refuses anything else, and its refusal is one line under the
+  // buttons; the browser's own check points at the field instead.
+  it('asks the browser to hold a barcode to 8-14 digits', () => {
+    const wrapper = mountDialog(null)
+    const input = wrapper.findAll('input').find((i) => i.attributes('inputmode') === 'numeric')!
+    expect(input.attributes('pattern')).toBe('[0-9]{8,14}')
+  })
 })

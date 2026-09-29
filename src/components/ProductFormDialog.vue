@@ -46,7 +46,8 @@ const nameInput = ref<HTMLInputElement | null>(null)
 const name = ref('')
 const maker = ref('')
 const barcode = ref('')
-const baseWeight = ref('')
+// A number once typed into (v-model on type="number"), '' when empty.
+const baseWeight = ref<string | number>('')
 
 const editing = computed(() => props.product !== null)
 // A list's own row. Global rows -- promoted, or curated by an admin -- have
@@ -81,7 +82,7 @@ function submit() {
     barcode: barcode.value.trim() || null,
     // Null means "leave it" to the RPC, which is what a scoped row wants: it
     // has no weight worth setting and the field is not shown.
-    baseWeight: global.value ? Number(baseWeight.value.trim() || '0') : null,
+    baseWeight: global.value ? Number(String(baseWeight.value).trim() || '0') : null,
   })
 }
 
@@ -145,11 +146,16 @@ useModal({
 
           <label class="pf__field">
             <span class="pf__label">Barcode</span>
+            <!-- product_catalog_barcode_format allows 8-14 digits and nothing
+                 else. Said here, at the field, instead of as a constraint
+                 violation after the round trip. -->
             <input
               v-model="barcode"
               class="pf__input"
               type="text"
               inputmode="numeric"
+              pattern="[0-9]{8,14}"
+              title="8 to 14 digits"
               :disabled="busy"
             />
           </label>
