@@ -103,6 +103,12 @@ const routes: RouteRecordRaw[] = [
     meta: { crumb: 'OneSignal', icon: 'brand-onesignal' },
   },
   {
+    path: '/services/posthog',
+    name: 'posthog',
+    component: () => import('../views/PostHogView.vue'),
+    meta: { crumb: 'PostHog', icon: 'brand-posthog' },
+  },
+  {
     path: '/services/clerk',
     name: 'clerk',
     component: () => import('../views/ClerkView.vue'),

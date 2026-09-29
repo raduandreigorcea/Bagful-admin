@@ -4,6 +4,7 @@ import type { ProbeResult } from './health'
 import { isDeliberate, isStalled } from './scrapers'
 import {
   fetchClerkSummary,
+  fetchPostHogActivity,
   fetchPushNotifications,
   fetchSentryIssues,
   ServiceUnavailable,
@@ -222,7 +223,7 @@ export function checkPipelines(signal: AbortSignal, fetchImpl: typeof fetch = fe
 
 // ─── the services ────────────────────────────────────────────────────────────
 
-const SERVICE_LABELS: Record<Service, string> = { sentry: 'Sentry', onesignal: 'OneSignal', clerk: 'Clerk' }
+const SERVICE_LABELS: Record<Service, string> = { sentry: 'Sentry', onesignal: 'OneSignal', clerk: 'Clerk', posthog: 'PostHog' }
 
 export type ServiceFetchers = Record<Service, (signal: AbortSignal) => Promise<unknown>>
 
@@ -230,6 +231,7 @@ const DEFAULT_FETCHERS: ServiceFetchers = {
   sentry: fetchSentryIssues,
   onesignal: fetchPushNotifications,
   clerk: fetchClerkSummary,
+  posthog: fetchPostHogActivity,
 }
 
 /**
@@ -241,7 +243,7 @@ export async function checkServices(
   signal: AbortSignal,
   fetchers: ServiceFetchers = DEFAULT_FETCHERS,
 ): Promise<Check[]> {
-  const services: Service[] = ['sentry', 'onesignal', 'clerk']
+  const services: Service[] = ['sentry', 'onesignal', 'clerk', 'posthog']
   const settled = await Promise.allSettled(services.map((service) => fetchers[service](signal)))
   if (signal.aborted) throw new DOMException('aborted', 'AbortError')
   return settled.map((result, index) => {

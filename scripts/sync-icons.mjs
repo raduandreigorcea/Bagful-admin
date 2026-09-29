@@ -117,6 +117,7 @@ const BRANDS = [
   { name: 'brand-sentry', set: 'simple-icons', icon: 'sentry' },   // Sentry
   { name: 'brand-clerk', set: 'simple-icons', icon: 'clerk' },     // Clerk
   { name: 'brand-onesignal', set: 'logos', icon: 'onesignal' },    // OneSignal
+  { name: 'brand-posthog', set: 'logos', icon: 'posthog-icon' },   // PostHog
 ]
 
 const modules = join(root, 'node_modules')

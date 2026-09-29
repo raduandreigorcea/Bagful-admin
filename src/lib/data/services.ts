@@ -1,8 +1,8 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { getAppSupabase } from '../supabase'
 
-// Sentry, OneSignal and Clerk, read through FamCart's admin-services edge
-// function.
+// Sentry, OneSignal, Clerk and PostHog, read through FamCart's admin-services
+// edge function.
 //
 // Not directly, and never directly: all three answer only to a secret key, and
 // this dashboard holds none (.env.example says why). The function holds the
@@ -15,7 +15,7 @@ import { getAppSupabase } from '../supabase'
 // is deployed to both app projects and each answers from its own secrets. So a
 // page on famcart-dev can say "not configured" for a service production has.
 
-export type Service = 'sentry' | 'onesignal' | 'clerk'
+export type Service = 'sentry' | 'onesignal' | 'clerk' | 'posthog'
 
 export interface SentryIssue {
   id: string
@@ -68,12 +68,21 @@ export interface ClerkUser {
   locked: boolean
 }
 
+/** Counts only, per day; see posthogActivityQuery for why nothing else comes back. */
+export interface PostHogActivity {
+  channel: string
+  /** YYYY-MM-DD, oldest first. */
+  days: string[]
+  /** counts[event][part]: one number per day; part is '' for an event with no breakdown. */
+  counts: Record<string, Record<string, number[]>>
+}
+
 export interface ClerkSummary {
   total: number
   recent: ClerkUser[]
 }
 
-const SERVICE_NAMES: Record<Service, string> = { sentry: 'Sentry', onesignal: 'OneSignal', clerk: 'Clerk' }
+const SERVICE_NAMES: Record<Service, string> = { sentry: 'Sentry', onesignal: 'OneSignal', clerk: 'Clerk', posthog: 'PostHog' }
 
 /**
  * The service cannot be asked on this project at all, as opposed to having
@@ -140,6 +149,10 @@ export function fetchSentryFeedback(signal: AbortSignal): Promise<SentryFeedback
 
 export function fetchPushNotifications(signal: AbortSignal): Promise<PushNotification[]> {
   return ask({ service: 'onesignal', view: 'notifications' }, signal)
+}
+
+export function fetchPostHogActivity(signal: AbortSignal): Promise<PostHogActivity> {
+  return ask({ service: 'posthog', view: 'activity' }, signal)
 }
 
 export function fetchClerkSummary(signal: AbortSignal): Promise<ClerkSummary> {
