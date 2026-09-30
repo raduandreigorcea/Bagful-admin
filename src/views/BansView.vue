@@ -164,7 +164,7 @@ const dialogMessage = computed(() => {
   const target = pending.value
   if (!target) return ''
   return target.kind === 'user'
-    ? 'They can open FamCart again straight away. Their lists and everything in them are untouched — a ban never removed them.'
+    ? 'They can open Bagful again straight away. Their lists and everything in them are untouched — a ban never removed them.'
     : 'Its members get it back, along with every item and purchase inside it.'
 })
 

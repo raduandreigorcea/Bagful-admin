@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { clerkPlugin } from '@clerk/vue'
-// Order matters: the vendored FamCart stylesheet defines the tokens, and
+// Order matters: the vendored Bagful stylesheet defines the tokens, and
 // admin.css reads them. Swap these and every var() in the admin layer resolves
 // to nothing on first paint.
 import './vendor/style.css'
@@ -10,7 +10,7 @@ import router from './router'
 import { applyResolvedTheme, loadThemeMode } from './vendor/theme'
 
 // Before mount, so the first paint is already the right colour. Same reason
-// FamCart's main.ts does it here, and the same storage key, so a theme chosen in
+// Bagful's main.ts does it here, and the same storage key, so a theme chosen in
 // one shows up in the other.
 applyResolvedTheme(loadThemeMode(localStorage))
 
@@ -24,7 +24,7 @@ if (!publishableKey) {
   if (root) {
     root.innerHTML = `
       <div style="max-width:56ch;margin:20vh auto;padding:0 1rem;font-family:system-ui,sans-serif;line-height:1.6">
-        <h1 style="font-size:1.25rem;margin:0 0 .5rem">FamCart Admin is not configured</h1>
+        <h1 style="font-size:1.25rem;margin:0 0 .5rem">Bagful Admin is not configured</h1>
         <p style="margin:0 0 .75rem;color:#6b7280">
           VITE_CLERK_PUBLISHABLE_KEY is missing, so there is nothing to authenticate with.
           Copy <code>.env.example</code> to <code>.env</code> and fill it in.

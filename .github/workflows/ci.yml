@@ -1,7 +1,7 @@
 name: CI
 
 # The dashboard had no CI at all until this file, which is the one thing that
-# separated it from its two sibling repos: FamCart's own app and the catalog
+# separated it from its two sibling repos: Bagful's own app and the catalog
 # both gate every push and pull request, and this one was green only because
 # whoever pushed had remembered to run the commands by hand.
 #

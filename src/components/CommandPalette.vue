@@ -14,7 +14,7 @@ import { useModal } from '../lib/useModal'
 //
 // Queries all three sources concurrently with allSettled semantics: an
 // unreachable catalog project must cost the catalog rows and nothing else, which
-// is the same rule FamCart's own suggestions follow and the same one the health
+// is the same rule Bagful's own suggestions follow and the same one the health
 // probes follow. A palette that returns nothing because one of three backends is
 // down is worse than one that returns two thirds.
 
@@ -139,7 +139,7 @@ async function run(term: string) {
 watch(query, (value) => {
   if (debounce) clearTimeout(debounce)
   // Long enough to mean "stopped typing" on a keyboard, which is faster than the
-  // 300ms FamCart uses for thumbs.
+  // 300ms Bagful uses for thumbs.
   debounce = setTimeout(() => void run(value), 180)
 })
 

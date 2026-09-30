@@ -139,7 +139,7 @@ useModal({
   margin-top: var(--space-1);
 }
 
-/* Matches AppButton's treatment without importing it: AppButton is FamCart's,
+/* Matches AppButton's treatment without importing it: AppButton is Bagful's,
    not vendored here, and copying one button's look is cheaper than vendoring a
    component and guarding it against drift forever. */
 .confirm__btn {

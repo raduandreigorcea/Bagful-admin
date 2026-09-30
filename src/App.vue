@@ -32,7 +32,7 @@ const { user } = useUser()
  * not. Signing in with an account that is not in admin_users left you on a
  * page with no sign-out, no account switch and no project switch: a dead end
  * you could only leave by clearing site data. Clerk authenticates anyone with
- * a FamCart login, so landing there is normal rather than exceptional, and it
+ * a Bagful login, so landing there is normal rather than exceptional, and it
  * is exactly the case that needs an exit.
  *
  * An exit that can fail silently is not an exit -- see useSignOut.ts.
@@ -41,7 +41,7 @@ const { signOut, busy: signingOut, error: signOutError } = useSignOut()
 
 // Installs the token resolver the data layer uses. Done once, here, because the
 // data layer is plain functions with no component context of their own -- the
-// same split FamCart makes between useSupabase() and getSupabase().
+// same split Bagful makes between useSupabase() and getSupabase().
 useSupabaseAuthBridge()
 
 // A computed, not a snapshot: the switcher can change it at any moment and the
@@ -146,18 +146,18 @@ watch(activeProject, () => {
   <div v-if="!ready" class="boot">
     <div class="boot__lockup">
       <BrandMark :size="52" />
-      <div class="boot__name">FamCart Admin</div>
+      <div class="boot__name">Bagful Admin</div>
     </div>
     <StateBlock state="loading" :lines="2" />
   </div>
 
   <!-- Signed out: Clerk's own component, because an internal tool has no reason
-       to maintain a bespoke sign-in form. FamCart has one for brand reasons that
+       to maintain a bespoke sign-in form. Bagful has one for brand reasons that
        do not apply here. -->
   <div v-else-if="!isSignedIn" class="gate">
     <div class="gate__intro">
       <BrandMark :size="48" />
-      <h1 class="gate__title">FamCart Admin</h1>
+      <h1 class="gate__title">Bagful Admin</h1>
     </div>
     <SignIn />
   </div>
@@ -177,7 +177,7 @@ watch(activeProject, () => {
            suite asserts. But the audience was wrong. This dashboard
            authenticates against the SAME Clerk instance as the consumer app, so
            the people who reach this screen are not colleagues awaiting a grant;
-           they are every FamCart user who found the URL. Handing all of them the
+           they are every Bagful user who found the URL. Handing all of them the
            table name and the exact statement to run is free reconnaissance for
            the day somebody does get hold of a service-role key.
 
@@ -215,7 +215,7 @@ watch(activeProject, () => {
       </p>
       <!-- The failure itself is in the console, not here. A PostgREST error
            names the function it could not resolve and frequently the schema
-           around it, and this screen is reachable by anybody with a FamCart
+           around it, and this screen is reachable by anybody with a Bagful
            account -- the same reason the "Not authorised" gate stopped printing
            the admin table. Whoever needs the detail is debugging and has
            devtools; whoever must not have it does not. -->
@@ -238,7 +238,7 @@ watch(activeProject, () => {
   <div v-else-if="adminState === 'checking'" class="boot">
     <div class="boot__lockup">
       <BrandMark :size="52" />
-      <div class="boot__name">FamCart Admin</div>
+      <div class="boot__name">Bagful Admin</div>
     </div>
     <StateBlock state="loading" :lines="2" />
   </div>
@@ -251,8 +251,8 @@ watch(activeProject, () => {
     <div class="brand">
       <RouterLink to="/" class="brand__home" title="Overview">
         <BrandMark :size="24" />
-        <span v-if="!navCollapsed" class="brand__name">FamCart <span class="brand__sub">Admin</span></span>
-        <span v-else class="u-sr">FamCart Admin</span>
+        <span v-if="!navCollapsed" class="brand__name">Bagful <span class="brand__sub">Admin</span></span>
+        <span v-else class="u-sr">Bagful Admin</span>
       </RouterLink>
     </div>
 

@@ -3,18 +3,18 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // Deliberately small. This is an internal desktop tool: no PWA, no service
-// worker, no source-map upload, no Capacitor. FamCart's vite config carries all
+// worker, no source-map upload, no Capacitor. Bagful's vite config carries all
 // of that because it ships to phones; none of it applies to a dashboard that
 // only ever opens in a browser on a desk.
 //
 // Port 5174 rather than Vite's 5173 so `npm run dev` here and `npm run dev` in
-// FamCart can be up at the same time, which is the normal way to work on this:
+// Bagful can be up at the same time, which is the normal way to work on this:
 // the app on one port producing rows, the dashboard on another reading them.
 export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5174,
-    // Same reasoning as FamCart's config: binding every interface is a decision
+    // Same reasoning as Bagful's config: binding every interface is a decision
     // to make per session, not once in a file. There is no dev:host script here
     // because a desktop admin tool has no phone to test on.
     strictPort: true,

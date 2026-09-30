@@ -1,9 +1,9 @@
 {
-  "name": "@famcart/admin",
+  "name": "@bagful/admin",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "FamCart Admin: an internal desktop dashboard over FamCart's lists, catalog and ingestion pipeline.",
+  "description": "Bagful Admin: an internal desktop dashboard over Bagful's lists, catalog and ingestion pipeline.",
   "engines": {
     "node": ">=22"
   },

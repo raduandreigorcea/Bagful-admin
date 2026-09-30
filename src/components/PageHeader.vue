@@ -91,7 +91,7 @@ const icon = computed(() => (typeof route.meta.icon === 'string' ? route.meta.ic
 }
 
 /* The mark beside a block holding the title AND the description, centred on the
-   two together -- exactly how FamCart lays out a dialog's title (the
+   two together -- exactly how Bagful lays out a dialog's title (the
    __title-wrap in AppSettingsModal and the rest): a flex row, a 12px gap, the
    text stacked in its own box.
 
@@ -113,7 +113,7 @@ const icon = computed(() => (typeof route.meta.icon === 'string' ? route.meta.ic
 /* The section mark. Tinted rather than outlined, because it is identity and not
    a control -- nothing about it should invite a click.
 
-   Drawn exactly as FamCart draws the mark beside a dialog title (AppSettingsModal,
+   Drawn exactly as Bagful draws the mark beside a dialog title (AppSettingsModal,
    ListSettingsModal, PurchaseHistoryModal and the rest): a 38px plate, a
    22px icon, the primary mixed 10% into the surface. It had its own 36px plate,
    18px icon and --admin-accent-wash tint, which made the dashboard look like a
@@ -132,7 +132,7 @@ const icon = computed(() => (typeof route.meta.icon === 'string' ? route.meta.ic
 
 .head__title {
   margin: 0;
-  /* text-lg and extrabold, as FamCart's dialog titles are. It was a step larger
+  /* text-lg and extrabold, as Bagful's dialog titles are. It was a step larger
      on the grounds that this is a page heading, and beside the app it simply
      read as too big. */
   font-size: var(--text-lg);

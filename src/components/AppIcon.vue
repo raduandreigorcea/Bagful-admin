@@ -20,7 +20,7 @@ import { computed, type PropType } from 'vue'
 //
 // ─── WHY ?raw AND v-html ─────────────────────────────────────────────────────
 //
-// Same pattern FamCart uses, for the same reason: the alternative is an <img>,
+// Same pattern Bagful uses, for the same reason: the alternative is an <img>,
 // which cannot inherit currentColor, so every icon would need a hardcoded colour
 // and would not follow the theme. Everything bound here is build-time content
 // from this repository, resolved through a static map below. No user data, no
@@ -49,7 +49,7 @@ const props = defineProps({
   /** Rendered size in px. The 24px viewBox scales to it. */
   size: { type: Number, default: 16 },
   /**
-   * Stroke weight. FamCart's files carry 1, which suits icons drawn large on a
+   * Stroke weight. Bagful's files carry 1, which suits icons drawn large on a
    * phone; at 16px in a dense table that reads as a smudge, so the default here
    * is heavier. Set as a CSS property, which wins over the presentation
    * attribute baked into the file.

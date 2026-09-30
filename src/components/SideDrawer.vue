@@ -10,7 +10,7 @@ import { useModal } from '../lib/useModal'
 // looking; a page is for landing on from a link or a bookmark. So the drawer
 // always offers "Open full page" rather than trying to be one.
 //
-// Focus handling follows the rules FamCart's AppModal established: focus moves
+// Focus handling follows the rules Bagful's AppModal established: focus moves
 // in on open, Escape closes, focus returns to whatever opened it, and Tab stays
 // inside. useModal owns all four -- three components here had the first three
 // each and none had the fourth, which made `aria-modal` a claim none of them

@@ -11,7 +11,7 @@
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 
-export const THEME_STORAGE_KEY = 'famcart-theme'
+export const THEME_STORAGE_KEY = 'bagful-theme'
 
 /**
  * The saved mode, or 'system' when nothing usable is saved. 'system' is the

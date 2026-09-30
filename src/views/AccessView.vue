@@ -159,7 +159,7 @@ async function confirmRevoke() {
 
     <PanelCard
       title="Grant access"
-      note="Takes a Clerk user id. The account does not need a FamCart profile yet, but it will need one to appear by name."
+      note="Takes a Clerk user id. The account does not need a Bagful profile yet, but it will need one to appear by name."
     >
       <form class="grant" @submit.prevent="grant">
         <label class="grant__field">
@@ -209,7 +209,7 @@ async function confirmRevoke() {
       title="Remove admin access?"
       :message="
         revoking
-          ? `${revoking.display_name || shortUserId(revoking.user_id)} will lose access to this dashboard immediately. Every admin query they make will be refused by the database. This does not affect their FamCart account.`
+          ? `${revoking.display_name || shortUserId(revoking.user_id)} will lose access to this dashboard immediately. Every admin query they make will be refused by the database. This does not affect their Bagful account.`
           : ''
       "
       confirm-label="Remove access"

@@ -50,7 +50,7 @@ defineProps({
 .panel {
   background: var(--bg-surface);
   border: var(--border-width-thin) solid var(--border-main);
-  /* Deliberately tighter than FamCart's AppCard, which rounds at 24px. That
+  /* Deliberately tighter than Bagful's AppCard, which rounds at 24px. That
      radius is right for a single card on a phone; at a grid of twelve panels it
      reads as soft and eats the alignment between their edges. */
   border-radius: var(--radius-lg);

@@ -81,9 +81,9 @@ export interface Pipeline {
  * judged from the catalog itself, by scrapersCheck below.
  */
 export const PIPELINES: Pipeline[] = [
-  { key: 'app-ci', label: 'App CI', repo: 'raduandreigorcea/FamCart', workflow: 'ci.yml', branch: 'master' },
-  { key: 'release', label: 'Release APK', repo: 'raduandreigorcea/FamCart', workflow: 'release-apk.yml', branch: 'master' },
-  { key: 'catalog-ci', label: 'Catalog CI', repo: 'raduandreigorcea/FamCart-catalog', workflow: 'ci.yml', branch: 'master' },
+  { key: 'app-ci', label: 'App CI', repo: 'raduandreigorcea/Bagful', workflow: 'ci.yml', branch: 'master' },
+  { key: 'release', label: 'Release APK', repo: 'raduandreigorcea/Bagful', workflow: 'release-apk.yml', branch: 'master' },
+  { key: 'catalog-ci', label: 'Catalog CI', repo: 'raduandreigorcea/Bagful-catalog', workflow: 'ci.yml', branch: 'master' },
 ]
 
 interface WorkflowRun {
@@ -180,7 +180,7 @@ export async function checkPipeline(
 ): Promise<Check> {
   const base = { key: pipeline.key, label: pipeline.label }
   const actions = `https://github.com/${pipeline.repo}/actions/workflows/${pipeline.workflow}`
-  const cacheKey = `famcart-admin:pipeline:${pipeline.repo}/${pipeline.workflow}@${pipeline.branch}`
+  const cacheKey = `bagful-admin:pipeline:${pipeline.repo}/${pipeline.workflow}@${pipeline.branch}`
   const known = recall(store, cacheKey)
 
   if (known && now - known.at < PIPELINE_CACHE_MS) return runCheck(pipeline, known.run, now)

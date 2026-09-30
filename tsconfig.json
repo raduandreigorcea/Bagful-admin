@@ -1,5 +1,5 @@
 {
-  // Mirrors FamCart's own tsconfig, including the two strictness flags that do
+  // Mirrors Bagful's own tsconfig, including the two strictness flags that do
   // most of the work here (noUnusedLocals / noUnusedParameters), so a module
   // vendored from there typechecks under identical rules on both sides.
   //

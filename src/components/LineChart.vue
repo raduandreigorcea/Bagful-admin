@@ -4,7 +4,7 @@ import type { Series } from '../lib/uiTypes'
 
 // Change over time, up to four series, with a crosshair and a tooltip.
 //
-// Hand-rolled SVG rather than a charting library, for the reason FamCart has no
+// Hand-rolled SVG rather than a charting library, for the reason Bagful has no
 // UI framework either: four hundred lines here replaces two hundred kilobytes of
 // download, and every decision below is one this dashboard actually needed to
 // make rather than one configured around a library's defaults.

@@ -63,7 +63,7 @@ const crumbs = computed(() => {
 })
 
 // ── theme ──────────────────────────────────────────────────────────────────
-// Same key, same modes, same resolver as FamCart, because theme.ts is vendored
+// Same key, same modes, same resolver as Bagful, because theme.ts is vendored
 // from it. Setting the theme here and opening the app shows the same choice.
 const mode = ref<ThemeMode>('system')
 let media: MediaQueryList | null = null

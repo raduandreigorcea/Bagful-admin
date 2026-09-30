@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { FunctionsHttpError } from '@supabase/supabase-js'
 
-// Sentry, OneSignal and Clerk, through FamCart's admin-services edge function.
+// Sentry, OneSignal and Clerk, through Bagful's admin-services edge function.
 //
 // What is worth pinning is how a failure is told apart, because each one sends
 // the reader somewhere different: a secret nobody set (set it), a function

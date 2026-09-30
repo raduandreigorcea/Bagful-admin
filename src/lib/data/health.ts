@@ -13,7 +13,7 @@ import { queryError } from './errors'
 //      server-side probe would be measuring a path no user takes.
 //   2. What the database says about itself: sizes, row estimates, connections,
 //      vacuum times, and which migrations it believes are applied.
-//   3. The audit trail, which is the nearest thing FamCart has to an error
+//   3. The audit trail, which is the nearest thing Bagful has to an error
 //      stream, since the browser talks to PostgREST directly and Sentry only
 //      ever sees the browser.
 //

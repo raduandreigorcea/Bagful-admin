@@ -1,12 +1,12 @@
 /* The admin layer.
  *
- * src/vendor/style.css is FamCart's own stylesheet, vendored byte-for-byte and
+ * src/vendor/style.css is Bagful's own stylesheet, vendored byte-for-byte and
  * guarded against drift. It brings the typeface, the whole token set and both
  * themes. This file adds only what a dense desktop tool needs and a phone app
  * never did, and it adds it in the same idiom: named tokens on :root, redefined
  * under [data-theme='dark'].
  *
- * Nothing here overrides a FamCart token. If a value looks like it wants to, the
+ * Nothing here overrides a Bagful token. If a value looks like it wants to, the
  * right move is a new admin-* token beside it, so the two can never fight and it
  * stays obvious which side of the line a colour came from.
  */
@@ -37,7 +37,7 @@
    * attention rather than out of anything it did. */
   --admin-row: 46px;
 
-  /* ── surfaces above FamCart's ────────────────────────────────────────────
+  /* ── surfaces above Bagful's ────────────────────────────────────────────
    * The app has one card on one background. A dashboard has a chrome layer
    * (sidebar, topbar) that must sit visually BEHIND the content, and a
    * table-header layer that must sit just above the card it is inside. Two more
@@ -272,7 +272,7 @@
 
 /* ── base ─────────────────────────────────────────────────────────────────── */
 
-/* FamCart sets `user-select: none` on everything, which is right for a phone app
+/* Bagful sets `user-select: none` on everything, which is right for a phone app
  * where a long-press should not select a product name. It is wrong here: half of
  * what this tool exists for is copying a Clerk id or an invite code out of a
  * table. Text is selectable again, and only the chrome opts back out. */

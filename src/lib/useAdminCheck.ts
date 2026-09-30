@@ -59,7 +59,7 @@ export function useAdminCheck(ask: () => Promise<boolean> = fetchIsAdmin): Admin
       // The detail goes to the console and not to the screen.
       //
       // Whoever needs it is debugging a misconfiguration and has devtools open;
-      // whoever must not have it is any FamCart user who reached this dashboard,
+      // whoever must not have it is any Bagful user who reached this dashboard,
       // since it authenticates against the same Clerk instance as the app. A
       // PostgREST failure carries the function it could not resolve and often
       // the schema around it, which is the same reconnaissance the "Not

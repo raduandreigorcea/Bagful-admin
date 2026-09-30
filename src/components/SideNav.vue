@@ -71,7 +71,7 @@ const groups: { heading: string; items: NavItem[] }[] = [
       { to: '/bans', label: 'Bans', icon: 'ban', title: 'Accounts the app refuses and lists an admin withdrew' },
     ],
   },
-  // Last, because these are not FamCart's own data: they are what the services
+  // Last, because these are not Bagful's own data: they are what the services
   // it runs on say about it, asked through the app project's edge function.
   {
     heading: 'Services',

@@ -22,7 +22,7 @@ import { formatCount, formatDateTime, formatRelative } from '../lib/format'
 // nothing to a table, and its failures only reach the edge function's logs, so
 // Health can say nothing about push. OneSignal keeps the count per notification.
 //
-// Follows the project switcher. famcart-dev has no push on purpose (its webhook
+// Follows the project switcher. bagful-dev has no push on purpose (its webhook
 // is unset and it holds no OneSignal secrets), so there this page says it is
 // not connected, which is the true answer.
 

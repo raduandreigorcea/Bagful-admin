@@ -4,8 +4,8 @@ import { useAuth } from '@clerk/vue'
 
 // Two app databases, one catalog, one Clerk session.
 //
-// FamCart has two projects with IDENTICAL schemas and very different
-// consequences: `famcart` holds real lists, `famcart-dev` holds whatever
+// Bagful has two projects with IDENTICAL schemas and very different
+// consequences: `bagful` holds real lists, `bagful-dev` holds whatever
 // was last tried. This dashboard can point at either, and switching is a
 // deliberate act rather than a config edit and a restart.
 //
@@ -17,7 +17,7 @@ import { useAuth } from '@clerk/vue'
 // What this file still does not have is a service-role key, and must never. The
 // dashboard sees across lists because public.admin_users says the signed-in
 // account may, checked inside every admin_* function. The browser holds nothing
-// more privileged than FamCart's own bundle does — twice over now, which changes
+// more privileged than Bagful's own bundle does — twice over now, which changes
 // nothing: an anon key is publishable by design and RLS is what stands behind it.
 
 export type AppProject = 'production' | 'development'
@@ -32,13 +32,13 @@ interface ProjectConfig {
 const PROJECTS: Record<AppProject, ProjectConfig> = {
   production: {
     key: 'production',
-    label: 'famcart',
+    label: 'bagful',
     url: import.meta.env.VITE_PROD_SUPABASE_URL,
     anonKey: import.meta.env.VITE_PROD_SUPABASE_ANON_KEY,
   },
   development: {
     key: 'development',
-    label: 'famcart-dev',
+    label: 'bagful-dev',
     url: import.meta.env.VITE_DEV_SUPABASE_URL,
     anonKey: import.meta.env.VITE_DEV_SUPABASE_ANON_KEY,
   },
@@ -60,7 +60,7 @@ export function canSwitchProjects(): boolean {
   return configuredProjects().length > 1
 }
 
-const STORAGE_KEY = 'famcart-admin-project'
+const STORAGE_KEY = 'bagful-admin-project'
 
 /**
  * Which project to open on.
@@ -182,7 +182,7 @@ export function clerkIssuer(): string | null {
 }
 
 // Reads that die at the network layer get one short retry, for the reason
-// FamCart's copy of this documents: after a machine sleeps the first request
+// Bagful's copy of this documents: after a machine sleeps the first request
 // often goes out on a dead keep-alive socket and fails without reaching
 // Supabase. HTTP responses are never retried, and neither are mutations.
 const RETRY_DELAYS_MS = [250, 750]
@@ -261,7 +261,7 @@ export function getCatalogSupabase(): SupabaseClient | null {
  *
  * Installed once from App.vue rather than per component, because the data layer
  * is plain functions that run outside any component context and useAuth() needs
- * one. Same split FamCart makes.
+ * one. Same split Bagful makes.
  */
 export function setTokenResolver(resolve: () => Promise<string | null>): void {
   getTokenFn = resolve

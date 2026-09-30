@@ -43,7 +43,7 @@ const profile = computed(() => detail.data.value?.profile ?? null)
 // ─── banning ─────────────────────────────────────────────────────────────────
 //
 // Not a delete. Deleting a profile row does not stick: the app upserts one on
-// every boot, so it returns the moment this person opens FamCart. The ban flag
+// every boot, so it returns the moment this person opens Bagful. The ban flag
 // is what those upserts refuse. Their memberships are deliberately untouched --
 // ownership is a membership row, so removing them would strip a list of
 // its admin.
@@ -156,7 +156,7 @@ const membershipNote = computed(() => {
         <AppIcon class="ban__glyph" name="ban" :size="16" />
         <div class="ban__copy">
           <p class="ban__lead">
-            FamCart has refused this account since
+            Bagful has refused this account since
             <time :title="formatDateTime(profile.banned_at as string)">
               {{ formatRelative(profile.banned_at as string) }}</time>.
           </p>
@@ -391,8 +391,8 @@ const membershipNote = computed(() => {
         ? `Lift the suspension on ${profile?.display_name ?? 'this account'}?`
         : `Suspend ${profile?.display_name ?? 'this account'}?`"
       :message="banned
-        ? 'They can use FamCart again. Their memberships were never removed, so they return to the lists they were already in.'
-        : 'FamCart refuses them at sign-in. Nothing is deleted and their memberships are left alone, so lifting this puts them straight back.'"
+        ? 'They can use Bagful again. Their memberships were never removed, so they return to the lists they were already in.'
+        : 'Bagful refuses them at sign-in. Nothing is deleted and their memberships are left alone, so lifting this puts them straight back.'"
       :confirm-label="banned ? 'Lift suspension' : 'Suspend'"
       tone="danger"
       :busy="banBusy"
