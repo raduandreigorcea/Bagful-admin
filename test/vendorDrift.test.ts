@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-// AR-2. src/vendor/ holds byte-for-byte copies of FamCart modules, and
+// AR-2. src/vendor/ holds byte-for-byte copies of Bagful modules, and
 // vendor.meta.json declares its SHA-256 hashes "authoritative" -- naming
-// FamCart's own test/vendorDrift.test.js as the thing that enforces them.
+// Bagful's own test/vendorDrift.test.js as the thing that enforces them.
 //
 // That file lives in the PARENT repo. This one is a submodule that must also
 // work as a standalone clone, which is the entire reason the files are vendored
@@ -29,7 +29,7 @@ const manifest = JSON.parse(
 
 /**
  * The manifest hashes LF-NORMALISED bytes, and the reason is in its own header:
- * FamCart is developed on Windows with core.autocrlf=true, so the working copy
+ * Bagful is developed on Windows with core.autocrlf=true, so the working copy
  * is CRLF there and LF on a Linux runner. Hashing raw bytes would make this
  * test pass on one and fail on the other -- which is worse than not having it,
  * because it would train everyone to ignore the failure.
@@ -39,7 +39,7 @@ function normalisedHash(path: string): string {
   return createHash('sha256').update(raw.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
 }
 
-describe('vendored FamCart modules', () => {
+describe('vendored Bagful modules', () => {
   it('declares the files that are actually vendored', () => {
     expect(Object.keys(manifest.files).sort()).toEqual(['style.css', 'theme.ts'])
   })
@@ -50,7 +50,7 @@ describe('vendored FamCart modules', () => {
       const actual = normalisedHash(join(vendorDir, name))
 
       // A failure here means someone edited a vendored copy directly. The fix
-      // is never to update the hash: change the upstream module in FamCart,
+      // is never to update the hash: change the upstream module in Bagful,
       // re-copy it, and then update the hash. Editing here silently forks the
       // design system, one colour at a time.
       expect(actual, `${name} has drifted from ${entry.upstream}`).toBe(entry.sha256)

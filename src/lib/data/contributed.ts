@@ -15,7 +15,7 @@ import type { LocalProductRow, Page, PageParams } from './types'
 // ask for the same thing, promote_product_from_scoped() in 006_product_catalog
 // collapses their scoped rows into one GLOBAL row and deletes the originals in
 // the same statement -- so a name one person invented becomes a suggestion
-// everybody sees. That is the only path in FamCart by which user-authored text
+// everybody sees. That is the only path in Bagful by which user-authored text
 // reaches other lists, which makes this table the place you look when
 // something needs to be caught.
 //

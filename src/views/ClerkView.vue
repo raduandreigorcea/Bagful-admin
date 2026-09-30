@@ -14,7 +14,7 @@ import { formatDateTime, formatRelative } from '../lib/format'
 
 // Clerk: the accounts as the sign-in service knows them.
 //
-// Read-only on purpose. FamCart already refuses an account through its own ban
+// Read-only on purpose. Bagful already refuses an account through its own ban
 // (the Bans page), and a second ban in Clerk would be a second switch for the
 // same decision, with two places to look when somebody cannot get in.
 //

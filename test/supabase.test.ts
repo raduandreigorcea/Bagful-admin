@@ -67,7 +67,7 @@ describe('clerkIssuer', () => {
     expect(decode(key)).toBe('needed-bass-4.clerk.accounts.dev')
 
     // pk_live_ decodes identically; only the prefix differs.
-    expect(decode(`pk_live_${btoa('clerk.famcart.app$')}`)).toBe('clerk.famcart.app')
+    expect(decode(`pk_live_${btoa('clerk.bagful.app$')}`)).toBe('clerk.bagful.app')
   })
 
   it('survives a malformed key rather than throwing at first paint', () => {

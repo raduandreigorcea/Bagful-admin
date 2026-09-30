@@ -3,13 +3,13 @@ import ts from 'typescript-eslint'
 import vue from 'eslint-plugin-vue'
 import globals from 'globals'
 
-// Narrow, for the reason FamCart's config gives at length: vue-tsc already owns
+// Narrow, for the reason Bagful's config gives at length: vue-tsc already owns
 // types, props, emits and template expressions, and tsconfig already has
 // noUnusedLocals and noUnusedParameters, so anything here that re-checks those is
 // duplicated work with two places to disagree.
 //
-// One rule differs from FamCart's, deliberately.
-// `vue/no-bare-strings-in-template` is OFF here. FamCart has it as an error
+// One rule differs from Bagful's, deliberately.
+// `vue/no-bare-strings-in-template` is OFF here. Bagful has it as an error
 // because every user-facing string in that app goes through t() and a bare word
 // in a template is a missed translation. This dashboard is deliberately English
 // only -- it has one reader, its vocabulary is the schema's ('list_id',
@@ -46,7 +46,7 @@ export default ts.config(
 
       'vue/multi-word-component-names': 'off',
 
-      // Formatting by another name. Same set FamCart turns off.
+      // Formatting by another name. Same set Bagful turns off.
       'vue/attributes-order': 'off',
       'vue/html-self-closing': 'off',
       'vue/max-attributes-per-line': 'off',

@@ -3,7 +3,7 @@
 //
 // ─── WHY `Unavailable` IS A TYPE AND NOT A NULL ──────────────────────────────
 //
-// Two sections of this dashboard ask for numbers FamCart does not currently
+// Two sections of this dashboard ask for numbers Bagful does not currently
 // record. Search Analytics wants query strings, zero-result rates and
 // autocomplete latency; nothing logs a search, because search_catalog() is a
 // pure read that returns rows and writes nothing. Product Pipeline wants records

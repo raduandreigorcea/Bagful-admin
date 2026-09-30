@@ -15,13 +15,13 @@ import { formatCompact, formatCount, formatDayMonth } from '../lib/format'
 // only learns about writes. Searches, scans, filters, who came back today.
 //
 // Counts per day and nothing else. admin-services runs one query that never
-// selects a person (see posthogActivityQuery in FamCart's
+// selects a person (see posthogActivityQuery in Bagful's
 // supabase/functions/_shared/services.ts), so this page cannot show who did
 // what even to an admin. Funnels and retention, which need per-person data,
 // stay in PostHog itself behind its own login: the link in the header.
 //
 // Follows the project switcher by channel: production's database reads
-// production's events, famcart-dev reads nightly's. Both land in the same
+// production's events, bagful-dev reads nightly's. Both land in the same
 // PostHog project and are told apart by the `channel` property.
 
 const POSTHOG_DASHBOARD = 'https://eu.posthog.com/project/287898/dashboard/982750'

@@ -1,6 +1,6 @@
-# FamCart Admin
+# Bagful Admin
 
-An internal desktop dashboard over FamCart's lists, catalog and ingestion
+An internal desktop dashboard over Bagful's lists, catalog and ingestion
 pipeline. One reader, one screen size, no public audience.
 
 ## What it is for
@@ -30,12 +30,12 @@ The bulk approve is confirmed, because that one is not row-by-row reversible.
 ## What enforces the rules
 
 Not this bundle. Every cross-list read goes through a `security definer`
-RPC in FamCart's `008_admin.sql`, and each one calls `admin_guard()` before it
+RPC in Bagful's `008_admin.sql`, and each one calls `admin_guard()` before it
 returns a row. The gate in `App.vue` decides what to *render*; the database
 decides what to *answer*. An account that is not in `public.admin_users` gets a
 sentence here and a `42501` from Postgres either way.
 
-That is why the keys this tool ships are the same publishable keys FamCart's own
+That is why the keys this tool ships are the same publishable keys Bagful's own
 client ships, and why there is no service-role key anywhere in it. If a panel
 appears to need one, the answer is another RPC over there, not a secret in a
 browser.

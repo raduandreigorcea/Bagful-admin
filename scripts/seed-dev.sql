@@ -1,8 +1,8 @@
--- Optional development data for famcart-dev.
+-- Optional development data for bagful-dev.
 --
 -- WHY THIS EXISTS
 --
--- famcart-dev is nearly empty: a couple of profiles, a couple of lists, one
+-- bagful-dev is nearly empty: a couple of profiles, a couple of lists, one
 -- list item, no purchase history and no audit events. That is fine for the app
 -- and useless for this dashboard, where most panels, charts, sort controls and
 -- pagers cannot be exercised at all against three rows. Running this fills it
@@ -17,12 +17,12 @@
 -- This will REFUSE to run unless you opt in for the session first. Paste both
 -- statements, in this order, into the SQL editor of the project you mean:
 --
---   set app.seed_ok = 'famcart-dev';
+--   set app.seed_ok = 'bagful-dev';
 --   -- then this whole file
 --
 -- The guard exists because production and development have identical schemas and
 -- the SQL editor does not say loudly which project it is attached to. Running
--- this against `famcart` would invent eight lists of people who do not
+-- this against `bagful` would invent eight lists of people who do not
 -- exist, inside real data, with no clean way to tell them apart afterwards.
 --
 -- ─── UNDOING IT ──────────────────────────────────────────────────────────────
@@ -38,9 +38,9 @@
 
 do $$
 begin
-  if current_setting('app.seed_ok', true) is distinct from 'famcart-dev' then
+  if current_setting('app.seed_ok', true) is distinct from 'bagful-dev' then
     raise exception
-      'Refusing to seed. Run `set app.seed_ok = ''famcart-dev'';` first, and be sure this is not production.';
+      'Refusing to seed. Run `set app.seed_ok = ''bagful-dev'';` first, and be sure this is not production.';
   end if;
 end $$;
 

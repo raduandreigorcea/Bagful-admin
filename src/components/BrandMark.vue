@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// The FamCart cart, and the only place in this repo that names the file.
+// The Bagful cart, and the only place in this repo that names the file.
 //
 // It is the app's own icon rather than a lookalike drawn for the dashboard:
-// public/icons/pwa-192.png is copied byte-for-byte out of FamCart's
+// public/icons/pwa-192.png is copied byte-for-byte out of Bagful's
 // public/icons/, so the tab, the phone home screen and this sidebar all carry
 // one mark. A second mark drawn "in the same spirit" is how a brand ends up
 // with two.

@@ -1,6 +1,6 @@
 # Every text file in this repo is LF, in the index and in the working tree, on
 # every machine. A submodule does NOT inherit the parent repo's .gitattributes,
-# so FamCart pinning this for itself did nothing here: a Windows clone has
+# so Bagful pinning this for itself did nothing here: a Windows clone has
 # core.autocrlf=true, checks these files out as CRLF, and prints a warning per
 # touched file.
 #

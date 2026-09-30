@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 // What the gate screens are allowed to tell somebody who is not an admin.
 //
 // This dashboard authenticates against the SAME Clerk instance as the consumer
-// app, so anybody with a FamCart account who finds the URL gets past sign-in and
+// app, so anybody with a Bagful account who finds the URL gets past sign-in and
 // lands on "Not authorised". That screen used to name public.admin_users and
 // print a ready-to-run insert seeding the reader's own Clerk id as an owner.
 //

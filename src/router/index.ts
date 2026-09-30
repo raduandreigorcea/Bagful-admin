@@ -88,7 +88,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/BansView.vue'),
     meta: { crumb: 'Bans', icon: 'ban' },
   },
-  // The outside services FamCart runs on, read through the app project's
+  // The outside services Bagful runs on, read through the app project's
   // admin-services edge function (lib/data/services.ts).
   {
     path: '/services/sentry',

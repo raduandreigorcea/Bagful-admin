@@ -87,7 +87,7 @@ export async function fetchActivitySeries(
 // ─── the one overview tile that has no data behind it ────────────────────────
 //
 // "Searches" is on the overview because it is one of the numbers worth watching.
-// It is also one FamCart does not have: the add-item box calls search_catalog()
+// It is also one Bagful does not have: the add-item box calls search_catalog()
 // on the catalog project, which selects rows and returns them, and no row is
 // written anywhere as a result. There is no table to count, no log to parse, and
 // no proxy that is honest -- product adds are a fraction of searches and a very

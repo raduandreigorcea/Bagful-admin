@@ -1,19 +1,19 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { getAppSupabase } from '../supabase'
 
-// Sentry, OneSignal, Clerk and PostHog, read through FamCart's admin-services
+// Sentry, OneSignal, Clerk and PostHog, read through Bagful's admin-services
 // edge function.
 //
 // Not directly, and never directly: all three answer only to a secret key, and
 // this dashboard holds none (.env.example says why). The function holds the
 // keys as secrets of the app project it is deployed to, checks is_admin() with
 // the caller's own Clerk token, and returns only the fields these pages render.
-// Its request and response shapes are in FamCart's
+// Its request and response shapes are in Bagful's
 // supabase/functions/_shared/services.ts; the types below mirror them.
 //
 // It follows the project switcher like every list read does, because it
 // is deployed to both app projects and each answers from its own secrets. So a
-// page on famcart-dev can say "not configured" for a service production has.
+// page on bagful-dev can say "not configured" for a service production has.
 
 export type Service = 'sentry' | 'onesignal' | 'clerk' | 'posthog'
 
