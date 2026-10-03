@@ -7,6 +7,7 @@ import StatTile from '../components/StatTile.vue'
 import LineChart from '../components/LineChart.vue'
 import type { Series } from '../lib/uiTypes'
 import BarChart from '../components/BarChart.vue'
+import PieChart from '../components/PieChart.vue'
 import StateBlock from '../components/StateBlock.vue'
 import SegmentedControl from '../components/SegmentedControl.vue'
 import { useQuery, useQueryGroup, describeError } from '../lib/useQuery'
@@ -18,6 +19,8 @@ import {
   searchVolume,
 } from '../lib/data/overview'
 import { probeProjects } from '../lib/data/health'
+import { catalogConfigured, fetchCatalogStats } from '../lib/data/catalog'
+import { countryName } from '../lib/data/scrapers'
 import { DEFAULT_RANGE, TIME_RANGES, bucketLabel, resolveRange } from '../lib/timeRange'
 import { formatCompact, formatCount } from '../lib/format'
 
@@ -34,10 +37,11 @@ const cumulative = useQuery((signal) => fetchCumulativeWindow(range.value, signa
 })
 const series = useQuery((signal) => fetchActivitySeries(range.value, signal), { watch: [range] })
 const probes = useQuery((signal) => probeProjects(signal))
+const catalog = useQuery((signal) => fetchCatalogStats(signal), { enabled: () => catalogConfigured() })
 
 // All four. `busy` used to watch three of them, so the spinner stopped while
 // the delta and the probes were still in flight.
-const page = useQueryGroup([overview, cumulative, series, probes])
+const page = useQueryGroup([overview, cumulative, series, probes, catalog])
 
 const rangeSegments = TIME_RANGES.map((r) => ({
   value: r.key,
@@ -89,6 +93,15 @@ const membershipSpread = computed(() =>
           ? 'In 1 list'
           : `In ${row.lists} lists`,
     value: row.users,
+  })),
+)
+
+/** Catalog products per market. A product two countries both sell counts in each. */
+const catalogCountries = computed(() =>
+  Object.entries(catalog.data.value?.countries ?? {}).map(([code, counts]) => ({
+    key: code,
+    label: countryName(code),
+    value: counts.products,
   })),
 )
 
@@ -209,7 +222,7 @@ const overviewError = computed(() => describeError(overview.error.value))
       </div>
 
       <div class="grid">
-        <div class="span-4">
+        <div class="span-3">
           <PanelCard title="List sizes" note="How many lists have how many members." fill>
             <StateBlock v-if="overview.loading.value" state="loading" :lines="4" />
             <StateBlock
@@ -222,7 +235,7 @@ const overviewError = computed(() => describeError(overview.error.value))
           </PanelCard>
         </div>
 
-        <div class="span-4">
+        <div class="span-3">
           <PanelCard title="Membership spread" note="How many lists each account belongs to." fill>
             <StateBlock v-if="overview.loading.value" state="loading" :lines="4" />
             <StateBlock
@@ -235,7 +248,26 @@ const overviewError = computed(() => describeError(overview.error.value))
           </PanelCard>
         </div>
 
-        <div class="span-4">
+        <div class="span-3">
+          <PanelCard title="Catalog by country" note="Scraped products in each market." fill>
+            <StateBlock v-if="catalog.loading.value" state="loading" :lines="4" />
+            <StateBlock
+              v-else-if="catalog.error.value"
+              state="error"
+              title="Could not load the catalog"
+              :message="catalog.error.value.message"
+            />
+            <StateBlock
+              v-else-if="!catalogCountries.length"
+              state="empty"
+              title="No counts yet"
+              message="The catalog has not been counted, or is not configured."
+            />
+            <PieChart v-else :bars="catalogCountries" :format="formatCompact" />
+          </PanelCard>
+        </div>
+
+        <div class="span-3">
           <PanelCard title="System" note="Reachability measured from this browser." fill>
             <StateBlock v-if="probes.loading.value" state="loading" :lines="3" />
             <div v-else class="system">

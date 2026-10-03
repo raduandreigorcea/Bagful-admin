@@ -157,6 +157,19 @@
   --chart-3: #c23b86;
   --chart-4: #b8730c;
 
+  /* Slots 5-11 exist for one chart: the catalog's share by country, which has
+   * to name all eleven markets. Everything else stays on the first four. The
+   * eleven together were validated the same way (adjacent pairs, in this order,
+   * against #fcfcfb): every check PASS, worst CVD pair 12.9 deutan, worst
+   * normal-vision pair 17.3. */
+  --chart-5: #7b52c9;
+  --chart-6: #d4542b;
+  --chart-7: #1a8fa6;
+  --chart-8: #8a8f1c;
+  --chart-9: #d0699a;
+  --chart-10: #a0522d;
+  --chart-11: #2b8fd6;
+
   /* Magnitude, not identity: one hue, light to dark. Used by the coverage bars
    * and the ingestion heat strip, never by a multi-series line. */
   --chart-seq-1: #d8ece2;
@@ -249,6 +262,14 @@
   --chart-2: #6b82e0;
   --chart-3: #d75f9e;
   --chart-4: #c2861f;
+  /* Against #151c25, all eleven in order: every check PASS. */
+  --chart-5: #9a7be0;
+  --chart-6: #e0693e;
+  --chart-7: #2a9cb2;
+  --chart-8: #969b2c;
+  --chart-9: #c86fc0;
+  --chart-10: #b5652f;
+  --chart-11: #3f96d9;
 
   --chart-seq-1: #1c2f2a;
   --chart-seq-2: #24503f;
