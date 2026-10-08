@@ -26,8 +26,9 @@ import { formatDateTime, formatRelative } from '../lib/format'
 // three wordings of one size are usually one product.
 //
 // "Same product" merges the ticked ones into the FIRST ticked, so the order of
-// ticking is the choice of which name stays. "Different" remembers every pair in
-// the group, so the group is not asked again until a new product joins it.
+// ticking is the choice of which name stays; a pair needs no ticks (chosen()).
+// "Different" remembers every pair in the group, so the group is not asked
+// again until a new product joins it.
 // Both are live for both apps at once; a merge can be undone from Merged.
 
 const LIMIT = 25
@@ -75,6 +76,18 @@ function tickedCount(family: string): number {
   return ticked.value[family]?.length ?? 0
 }
 
+// What Same product merges, the kept one first. A pair needs no ticks: there is
+// only one thing to merge, and a single tick says which name stays. A larger
+// group needs two, never the whole group by default: it can hold Pitch Black
+// beside plain Mountain Dew.
+function chosen(group: DuplicateGroup): string[] {
+  const t = ticked.value[group.family] ?? []
+  if (t.length >= 2) return t
+  if (group.products.length !== 2) return []
+  const ids = group.products.map((p) => p.id)
+  return t.length === 1 ? [t[0], ...ids.filter((id) => id !== t[0])] : ids
+}
+
 function toggle(family: string, id: string, on: boolean) {
   const current = (ticked.value[family] ?? []).filter((x) => x !== id)
   ticked.value = { ...ticked.value, [family]: on ? [...current, id] : current }
@@ -109,7 +122,7 @@ watch(
 )
 
 function same(group: DuplicateGroup) {
-  const [keep, ...rest] = ticked.value[group.family] ?? []
+  const [keep, ...rest] = chosen(group)
   if (!keep || rest.length === 0) return
   return decide(group, async () => {
     // One at a time: the database refuses a pair one shop lists twice, and the
@@ -172,7 +185,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
 
     <PanelCard
       :note="onCandidates
-        ? 'Same brand, size and pack. Tick the ones that are one product; the first ticked keeps its name.'
+        ? 'Same brand, size and pack. A pair merges into its first product, or into the one you tick. In a bigger group, tick the ones that are one product; the first ticked keeps its name.'
         : 'Undo puts the merged product back with the shops it had.'"
       flush
     >
@@ -212,8 +225,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
               </ul>
               <div class="dup__actions">
                 <span v-if="groupError[group.family]" class="dup__error">{{ groupError[group.family] }}</span>
-                <!-- Never the whole group by default: a group can hold Pitch Black beside plain Mountain Dew. -->
-                <span v-else-if="tickedCount(group.family) < 2" class="dup__hint u-caption">
+                <span v-else-if="chosen(group).length < 2" class="dup__hint u-caption">
                   {{ tickedCount(group.family) === 0 ? 'Tick the ones that are the same' : 'Tick one more' }}
                 </span>
                 <button
@@ -225,7 +237,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
                 <button
                   type="button"
                   class="u-btn dup__same"
-                  :disabled="working !== null || tickedCount(group.family) < 2"
+                  :disabled="working !== null || chosen(group).length < 2"
                   @click="same(group)"
                 >{{ working === group.family ? 'Working…' : 'Same product' }}</button>
               </div>
