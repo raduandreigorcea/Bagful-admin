@@ -116,6 +116,30 @@ describe('DuplicatesView', () => {
     expect(wrapper.find('.dup__hint').exists()).toBe(false)
   })
 
+  it('merges a pair without ticks, into the first product', async () => {
+    fetchNearDuplicates.mockResolvedValue({ rows: [{ ...group, products: group.products.slice(0, 2) }], total: 1, offset: 0 })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.dup__hint').exists()).toBe(false)
+    await wrapper.find('.dup__same').trigger('click')
+    await flushPromises()
+
+    expect(mergeProducts.mock.calls[0].slice(0, 2)).toEqual(['p-a', 'p-b'])
+  })
+
+  it('keeps the ticked product of a pair', async () => {
+    fetchNearDuplicates.mockResolvedValue({ rows: [{ ...group, products: group.products.slice(0, 2) }], total: 1, offset: 0 })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.findAll('.dup input[type="checkbox"]')[1].setValue(true)
+    await wrapper.find('.dup__same').trigger('click')
+    await flushPromises()
+
+    expect(mergeProducts.mock.calls[0].slice(0, 2)).toEqual(['p-b', 'p-a'])
+  })
+
   it('says every pair in a group is different', async () => {
     const wrapper = mountView()
     await flushPromises()
