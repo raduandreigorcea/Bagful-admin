@@ -240,8 +240,10 @@ const percent = computed(() =>
   outline-offset: 2px;
 }
 
+/* The card's own state, not the brand green: a running card turned green on
+   hover and read as finished. */
 .shop:has(.shop__link):hover {
-  border-color: var(--color-primary);
+  border-color: var(--edge);
 }
 
 /* The country's hover card stays reachable above the stretched link. */
