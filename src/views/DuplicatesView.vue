@@ -170,7 +170,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
       </template>
 
       <template v-if="onCandidates">
-        <!-- ~9 s on the live catalog: a blank panel that long reads as broken. -->
+        <!-- A cold free-plan database can still take a second: no blank panel meanwhile. -->
         <StateBlock v-if="candidates.loading.value" state="loading" :lines="6" />
         <StateBlock
           v-else-if="candidates.error.value"
