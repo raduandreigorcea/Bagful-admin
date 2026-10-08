@@ -71,7 +71,7 @@ function activityTone(lastActive: string): 'good' | 'idle' {
       @refresh="lists.refetch"
     />
 
-    <PanelCard flush>
+    <PanelCard title="All lists" note="Open one to see its members and items." flush>
       <div class="u-toolbar">
         <FilterBar
           v-model="query"

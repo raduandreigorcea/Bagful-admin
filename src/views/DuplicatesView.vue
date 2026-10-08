@@ -159,6 +159,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
     />
 
     <PanelCard
+      :title="onCandidates ? 'Near duplicates' : 'Merges'"
       :note="onCandidates
         ? 'Same brand, size and pack, most alike first. Same product keeps the selected name.'
         : 'Undo puts the merged product back with the shops it had.'"
@@ -199,7 +200,10 @@ const SOURCE: Record<MergeRecord['source'], string> = {
                     />
                     <span class="dup__name">{{ product.name }}</span>
                   </label>
-                  <span class="dup__shops u-caption">{{ product.retailers.join(', ') || 'no shop' }}</span>
+                  <span class="dup__shops">
+                    <span v-for="slug in product.retailers" :key="slug" class="u-shop">{{ slug }}</span>
+                    <span v-if="!product.retailers.length" class="u-muted">no shop</span>
+                  </span>
                 </li>
               </ul>
               <div class="dup__actions">
@@ -337,7 +341,8 @@ const SOURCE: Record<MergeRecord['source'], string> = {
 
 .dup__shops {
   flex: none;
-  color: var(--text-secondary);
+  display: inline-flex;
+  gap: var(--space-1);
 }
 
 .dup__actions {

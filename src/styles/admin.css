@@ -523,6 +523,44 @@ a.u-truncate {
   color: var(--text-secondary);
 }
 
+/* A link inside a table cell. Here because ContributedView wrote class="link"
+ * and the only .link was scoped to HealthView, so its list names rendered as the
+ * browser's blue underline. */
+.u-link {
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.u-link:hover {
+  text-decoration: underline;
+}
+
+/* A shop's slug as a chip, wherever a row says which shops list it. `.table td`
+ * sets `overflow-wrap: anywhere`, which shrinks a flex item's minimum to one
+ * character: `normal` keeps "mega-image" on one line instead of stacking it. */
+.u-shop {
+  overflow-wrap: normal;
+  white-space: nowrap;
+  padding: 0 var(--space-1-5);
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* "+3": the shops a narrow cell leaves out. */
+.u-shop--more {
+  background: none;
+  color: var(--text-disabled);
+}
+
 .u-btn {
   display: inline-flex;
   align-items: center;

@@ -195,7 +195,7 @@ const SEGMENTS = [
       </template>
     </PageHeader>
 
-    <PanelCard flush>
+    <PanelCard title="Products" note="Added by people to their lists, not scraped from a shop." flush>
       <template #actions>
         <SegmentedControl
           :model-value="scope"
@@ -259,7 +259,7 @@ const SEGMENTS = [
           <RouterLink
             v-if="row.list_id"
             :to="`/lists/${row.list_id}`"
-            class="link u-truncate"
+            class="u-link u-truncate"
           >
             {{ row.list_name || 'Unknown' }}
           </RouterLink>

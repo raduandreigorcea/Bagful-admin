@@ -203,7 +203,7 @@ async function confirmReversal() {
       @refresh="page.refresh"
     />
 
-    <PanelCard :note="onPeople
+    <PanelCard :title="onPeople ? 'Banned accounts' : 'Withdrawn lists'" :note="onPeople
       ? 'Refused at the door. Their memberships are left alone.'
       : 'Hidden wholesale, with everything inside them.'" flush>
       <template #actions>
