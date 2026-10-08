@@ -166,7 +166,7 @@ const columns: Column<CatalogProductRow>[] = [
   // IS the shop.
   //
   // Three pills and a +N measure 142px with the cell's padding and no longer
-  // shrink (see .mk__code), so the floor stays.
+  // shrink (see .u-shop in admin.css), so the floor stays.
   { key: 'retailers', label: 'Shops', width: '18%', minPx: 142 },
   { key: 'min_price', label: 'From', numeric: true, width: '10%', hideBelow: 1400 },
   { key: 'popularity', label: 'Popularity', numeric: true, width: '12%' },
@@ -333,7 +333,7 @@ const removalMessage = computed(() => {
       message="Set VITE_CATALOG_SUPABASE_URL and VITE_CATALOG_SUPABASE_ANON_KEY to read it. Every other section is unaffected."
     />
 
-    <PanelCard v-else flush>
+    <PanelCard v-else title="Products" note="One row per product, however many shops sell it. From is the cheapest shop's price." flush>
       <div class="u-toolbar">
         <FilterBar
           v-model="query"
@@ -416,12 +416,12 @@ const removalMessage = computed(() => {
              put it back. -->
         <template #cell-retailers="{ row }">
           <span v-if="row.retailers.length" class="mk">
-            <span v-for="code in row.retailers.slice(0, RETAILERS_SHOWN)" :key="code" class="mk__code">
+            <span v-for="code in row.retailers.slice(0, RETAILERS_SHOWN)" :key="code" class="u-shop">
               {{ code }}
             </span>
             <span
               v-if="row.retailers.length > RETAILERS_SHOWN"
-              class="mk__more"
+              class="u-shop u-shop--more"
               :title="row.retailers.join(' ')"
             >+{{ row.retailers.length - RETAILERS_SHOWN }}</span>
           </span>
@@ -667,33 +667,7 @@ const removalMessage = computed(() => {
   flex-wrap: nowrap;
 }
 
-/* A market code is two letters and must stay two letters on one line.
- *
- * `.table td` sets `overflow-wrap: anywhere`, which exists for the barcodes and
- * Clerk ids that would otherwise paint across the next column -- and it also
- * changes the automatic minimum size of every flex item inside the cell to ONE
- * CHARACTER. So when the column got tight these pills did not stop shrinking at
- * their own width; they shrank to a letter and stacked R over O. Saying `normal`
- * here puts their minimum back to the whole token, and the column's minPx is
- * what keeps the room for them. */
-.mk__code,
-.mk__more {
-  overflow-wrap: normal;
-  white-space: nowrap;
-  padding: 0 var(--space-1-5);
-  border-radius: var(--radius-sm);
-  background: var(--bg-hover);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.mk__more {
-  background: none;
-  color: var(--text-disabled);
-}
+/* The chips themselves are .u-shop in admin.css. */
 
 /* ─── provenance ─────────────────────────────────────────────────────────────
    Usually one pill. Two means a row an upstream source and a person both

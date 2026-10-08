@@ -83,7 +83,7 @@ function activityTone(lastActive: string): 'good' | 'idle' {
       @refresh="users.refetch"
     />
 
-    <PanelCard flush>
+    <PanelCard title="Accounts" note="Open one to see its lists and what it has done." flush>
       <div class="u-toolbar">
         <FilterBar
           v-model="query"

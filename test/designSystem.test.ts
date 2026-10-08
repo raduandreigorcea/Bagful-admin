@@ -302,7 +302,6 @@ describe('a row action that has lost its label', () => {
 })
 
 describe('a cell that must not break mid-token', () => {
-  const catalog = readFileSync('src/views/CatalogView.vue', 'utf8')
   const admin = readFileSync('src/styles/admin.css', 'utf8')
 
   // `.table td` sets `overflow-wrap: anywhere` so a barcode or a Clerk id breaks
@@ -310,11 +309,19 @@ describe('a cell that must not break mid-token', () => {
   // effect is that it also drops the automatic minimum size of every flex item
   // in the cell to ONE CHARACTER -- so the market pills stopped shrinking at
   // their own width and stacked R over O instead.
-  it('puts the market pills back to breaking on words', () => {
-    const rule = catalog.slice(catalog.indexOf('.mk__code,'))
+  it('puts the shop pills back to breaking on words', () => {
+    const rule = admin.slice(admin.indexOf('.u-shop {'))
     const body = rule.slice(0, rule.indexOf('}'))
     expect(body).toMatch(/overflow-wrap:\s*normal/)
     expect(body).toMatch(/white-space:\s*nowrap/)
+  })
+
+  // ContributedView wrote class="link" while the only .link was scoped to
+  // HealthView, so its list names came out as the browser's blue underline.
+  it('styles every table link with the shared u-link', () => {
+    const bare = files.filter((f) => /class="link[ "]/.test(f.text)).map((f) => f.path)
+    expect(bare).toEqual([])
+    expect(admin).toContain('.u-link {')
   })
 
   // An inline box cannot be clipped, so u-truncate on an <a> does nothing at all

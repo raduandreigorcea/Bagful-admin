@@ -668,7 +668,7 @@ const allClear = computed(() =>
           <span v-else class="u-muted">unauthenticated</span>
         </template>
         <template #cell-list_name="{ row }">
-          <RouterLink v-if="row.list_id" :to="`/lists/${row.list_id}`" class="link u-truncate">
+          <RouterLink v-if="row.list_id" :to="`/lists/${row.list_id}`" class="u-link u-truncate">
             {{ row.list_name || 'Deleted list' }}
           </RouterLink>
           <span v-else class="u-muted">--</span>
@@ -1051,19 +1051,6 @@ a.check__detail:hover {
 .dead--high {
   color: var(--warning-text);
   font-weight: var(--weight-semibold);
-}
-
-.link {
-  color: var(--color-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  text-decoration: none;
-  display: inline-block;
-  max-width: 100%;
-}
-
-.link:hover {
-  text-decoration: underline;
 }
 
 .migrations {
