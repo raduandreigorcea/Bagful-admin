@@ -71,6 +71,10 @@ function isTicked(family: string, id: string): boolean {
   return ticked.value[family]?.includes(id) ?? false
 }
 
+function tickedCount(family: string): number {
+  return ticked.value[family]?.length ?? 0
+}
+
 function toggle(family: string, id: string, on: boolean) {
   const current = (ticked.value[family] ?? []).filter((x) => x !== id)
   ticked.value = { ...ticked.value, [family]: on ? [...current, id] : current }
@@ -208,6 +212,10 @@ const SOURCE: Record<MergeRecord['source'], string> = {
               </ul>
               <div class="dup__actions">
                 <span v-if="groupError[group.family]" class="dup__error">{{ groupError[group.family] }}</span>
+                <!-- Never the whole group by default: a group can hold Pitch Black beside plain Mountain Dew. -->
+                <span v-else-if="tickedCount(group.family) < 2" class="dup__hint u-caption">
+                  {{ tickedCount(group.family) === 0 ? 'Tick the ones that are the same' : 'Tick one more' }}
+                </span>
                 <button
                   type="button"
                   class="u-btn dup__different"
@@ -217,7 +225,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
                 <button
                   type="button"
                   class="u-btn dup__same"
-                  :disabled="working !== null || (ticked[group.family]?.length ?? 0) < 2"
+                  :disabled="working !== null || tickedCount(group.family) < 2"
                   @click="same(group)"
                 >{{ working === group.family ? 'Working…' : 'Same product' }}</button>
               </div>
@@ -349,6 +357,10 @@ const SOURCE: Record<MergeRecord['source'], string> = {
   align-items: center;
   gap: var(--space-2);
   flex: none;
+}
+
+.dup__hint {
+  color: var(--text-secondary);
 }
 
 .dup__error {
