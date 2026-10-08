@@ -22,13 +22,12 @@ import { formatDateTime, formatRelative } from '../lib/format'
 
 // Products two shops wrote differently. The catalog merges on its own what it
 // can prove (033_dedupe.sql); these are the near misses, one brand, size and
-// pack with more than one set of words, smallest groups first because two or
-// three wordings of one size are usually one product.
+// pack with more than one set of words, sold in one country and sharing a
+// word, the most alike first.
 //
-// "Same product" merges the ticked ones into the FIRST ticked, so the order of
-// ticking is the choice of which name stays; a pair needs no ticks (chosen()).
-// "Different" remembers every pair in the group, so the group is not asked
-// again until a new product joins it.
+// Each candidate is a PAIR (033 says why not a family). "Same product" merges it
+// into the selected name; "Different" remembers the pair, so it is not asked
+// again.
 // Both are live for both apps at once; a merge can be undone from Merged.
 
 const LIMIT = 25
@@ -62,35 +61,14 @@ const page = useQueryGroup([candidates, merges])
 const groups = computed(() => candidates.data.value?.rows ?? [])
 const noCandidates = computed(() => candidates.data.value !== null && groups.value.length === 0)
 
-// ─── deciding a group ────────────────────────────────────────────────────────
-// Ticks are kept in the order they were made, per group.
-const ticked = ref<Record<string, string[]>>({})
+// ─── deciding a pair ─────────────────────────────────────────────────────────
+// The name that stays, per pair; the first product (most shops) until picked.
+const kept = ref<Record<string, string>>({})
 const working = ref<string | null>(null)
 const groupError = ref<Record<string, string>>({})
 
-function isTicked(family: string, id: string): boolean {
-  return ticked.value[family]?.includes(id) ?? false
-}
-
-function tickedCount(family: string): number {
-  return ticked.value[family]?.length ?? 0
-}
-
-// What Same product merges, the kept one first. A pair needs no ticks: there is
-// only one thing to merge, and a single tick says which name stays. A larger
-// group needs two, never the whole group by default: it can hold Pitch Black
-// beside plain Mountain Dew.
-function chosen(group: DuplicateGroup): string[] {
-  const t = ticked.value[group.family] ?? []
-  if (t.length >= 2) return t
-  if (group.products.length !== 2) return []
-  const ids = group.products.map((p) => p.id)
-  return t.length === 1 ? [t[0], ...ids.filter((id) => id !== t[0])] : ids
-}
-
-function toggle(family: string, id: string, on: boolean) {
-  const current = (ticked.value[family] ?? []).filter((x) => x !== id)
-  ticked.value = { ...ticked.value, [family]: on ? [...current, id] : current }
+function keepOf(group: DuplicateGroup): string {
+  return kept.value[group.family] ?? group.products[0].id
 }
 
 async function decide(group: DuplicateGroup, action: () => Promise<void>) {
@@ -101,17 +79,15 @@ async function decide(group: DuplicateGroup, action: () => Promise<void>) {
   } catch (caught) {
     groupError.value = { ...groupError.value, [group.family]: caught instanceof Error ? caught.message : String(caught) }
   } finally {
-    // Reloaded on failure too: a merge loop that fails on its third product has
-    // already merged two, and a page still showing them makes a retry fail on
-    // each with "product not found".
-    ticked.value = { ...ticked.value, [group.family]: [] }
+    // Reloaded on failure too: whatever the database refused, the page then
+    // shows what it holds now rather than what a retry would fail on.
     working.value = null
     await candidates.refetch()
   }
 }
 
-// Deciding the last group on a later page leaves that page empty, and an empty
-// page says "Nothing left to decide" while earlier pages still hold groups.
+// Deciding the last pair on a later page leaves that page empty, and an empty
+// page says "Nothing left to decide" while earlier pages still hold pairs.
 watch(
   () => candidates.data.value,
   (page) => {
@@ -122,12 +98,11 @@ watch(
 )
 
 function same(group: DuplicateGroup) {
-  const [keep, ...rest] = chosen(group)
-  if (!keep || rest.length === 0) return
+  const keep = keepOf(group)
+  const drop = group.products.find((p) => p.id !== keep)
+  if (!drop) return
   return decide(group, async () => {
-    // One at a time: the database refuses a pair one shop lists twice, and the
-    // message names that pair rather than failing the whole group.
-    for (const drop of rest) await mergeProducts(keep, drop, new AbortController().signal)
+    await mergeProducts(keep, drop.id, new AbortController().signal)
   })
 }
 
@@ -185,7 +160,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
 
     <PanelCard
       :note="onCandidates
-        ? 'Same brand, size and pack. A pair merges into its first product, or into the one you tick. In a bigger group, tick the ones that are one product; the first ticked keeps its name.'
+        ? 'Same brand, size and pack, most alike first. Same product keeps the selected name.'
         : 'Undo puts the merged product back with the shops it had.'"
       flush
     >
@@ -194,8 +169,10 @@ const SOURCE: Record<MergeRecord['source'], string> = {
       </template>
 
       <template v-if="onCandidates">
+        <!-- ~9 s on the live catalog: a blank panel that long reads as broken. -->
+        <StateBlock v-if="candidates.loading.value" state="loading" :lines="6" />
         <StateBlock
-          v-if="candidates.error.value"
+          v-else-if="candidates.error.value"
           state="error"
           title="Could not load the candidates"
           :message="describeError(candidates.error.value).detail"
@@ -213,10 +190,12 @@ const SOURCE: Record<MergeRecord['source'], string> = {
                 <li v-for="product in group.products" :key="product.id" class="dup__product">
                   <label class="dup__pick">
                     <input
-                      type="checkbox"
-                      :checked="isTicked(group.family, product.id)"
+                      type="radio"
+                      :name="`keep-${group.family}`"
+                      :checked="keepOf(group) === product.id"
                       :disabled="working !== null"
-                      @change="toggle(group.family, product.id, ($event.target as HTMLInputElement).checked)"
+                      title="Keep this name"
+                      @change="kept = { ...kept, [group.family]: product.id }"
                     />
                     <span class="dup__name">{{ product.name }}</span>
                   </label>
@@ -225,9 +204,6 @@ const SOURCE: Record<MergeRecord['source'], string> = {
               </ul>
               <div class="dup__actions">
                 <span v-if="groupError[group.family]" class="dup__error">{{ groupError[group.family] }}</span>
-                <span v-else-if="chosen(group).length < 2" class="dup__hint u-caption">
-                  {{ tickedCount(group.family) === 0 ? 'Tick the ones that are the same' : 'Tick one more' }}
-                </span>
                 <button
                   type="button"
                   class="u-btn dup__different"
@@ -237,7 +213,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
                 <button
                   type="button"
                   class="u-btn dup__same"
-                  :disabled="working !== null || chosen(group).length < 2"
+                  :disabled="working !== null"
                   @click="same(group)"
                 >{{ working === group.family ? 'Working…' : 'Same product' }}</button>
               </div>
@@ -278,7 +254,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
           :total="candidates.data.value?.total ?? 0"
           :offset="candidatesOffset"
           :limit="LIMIT"
-          :loading="candidates.loading.value"
+          :loading="candidates.fetching.value"
           @go="candidatesOffset = $event"
         />
         <TablePager
@@ -286,7 +262,7 @@ const SOURCE: Record<MergeRecord['source'], string> = {
           :total="merges.data.value?.total ?? 0"
           :offset="mergedOffset"
           :limit="LIMIT"
-          :loading="merges.loading.value"
+          :loading="merges.fetching.value"
           @go="mergedOffset = $event"
         />
       </template>
@@ -369,10 +345,6 @@ const SOURCE: Record<MergeRecord['source'], string> = {
   align-items: center;
   gap: var(--space-2);
   flex: none;
-}
-
-.dup__hint {
-  color: var(--text-secondary);
 }
 
 .dup__error {

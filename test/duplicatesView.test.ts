@@ -32,7 +32,7 @@ const stubs = {
     template: `<span><button v-for="s in segments" :key="s.value" class="seg__item" :data-value="s.value"
       @click="$emit('update:modelValue', s.value)">{{ s.label }}</button></span>`,
   },
-  StateBlock: { props: ['title'], template: '<div class="state">{{ title }}</div>' },
+  StateBlock: { props: ['title', 'state'], template: '<div class="state" :data-state="state">{{ title }}</div>' },
   TablePager: { emits: ['go'], template: `<nav><button class="pager__next" @click="$emit('go', 25)">next</button></nav>` },
   ConfirmDialog: {
     props: ['open', 'title'],
@@ -47,12 +47,11 @@ const stubs = {
 }
 
 const group = {
-  family: 'mountain dew|ml:1000|1',
+  family: 'mountain dew|ml:1000|1|p-a|p-b',
   total: 1,
   products: [
     { id: 'p-a', name: 'Mountain Dew 1L', brand: 'Mountain Dew', match_key: 'k1', retailers: ['carrefour', 'auchan'] },
     { id: 'p-b', name: 'Bautura carbogazoasa cu gust de citrice 1L', brand: 'Mountain Dew', match_key: 'k2', retailers: ['mega-image'] },
-    { id: 'p-c', name: 'Mountain Dew Pitch Black 1L', brand: 'Mountain Dew', match_key: 'k3', retailers: ['penny'] },
   ],
 }
 
@@ -72,6 +71,14 @@ describe('DuplicatesView', () => {
     fetchMerges.mockResolvedValue({ rows: [record], total: 1, offset: 0 })
   })
 
+  it('says it is loading until the candidates arrive', async () => {
+    fetchNearDuplicates.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.state[data-state="loading"]').exists()).toBe(true)
+  })
+
   it('shows each group with every product and its shops', async () => {
     const wrapper = mountView()
     await flushPromises()
@@ -81,13 +88,10 @@ describe('DuplicatesView', () => {
     expect(wrapper.text()).toContain('mega-image')
   })
 
-  it('merges the ticked products into the first one ticked', async () => {
+  it('merges a pair into the first product', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const boxes = wrapper.findAll('.dup input[type="checkbox"]')
-    await boxes[0].setValue(true)
-    await boxes[1].setValue(true)
     await wrapper.find('.dup__same').trigger('click')
     await flushPromises()
 
@@ -96,51 +100,18 @@ describe('DuplicatesView', () => {
     expect(fetchNearDuplicates).toHaveBeenCalledTimes(2)
   })
 
-  it('cannot merge fewer than two products', async () => {
+  it('keeps the name picked', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.findAll('.dup input[type="checkbox"]')[0].setValue(true)
-    expect(wrapper.find('.dup__same').attributes('disabled')).toBeDefined()
-  })
-
-  it('says to tick the products until two are ticked', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-
-    expect(wrapper.find('.dup__hint').text()).toBe('Tick the ones that are the same')
-    const boxes = wrapper.findAll('.dup input[type="checkbox"]')
-    await boxes[0].setValue(true)
-    expect(wrapper.find('.dup__hint').text()).toBe('Tick one more')
-    await boxes[1].setValue(true)
-    expect(wrapper.find('.dup__hint').exists()).toBe(false)
-  })
-
-  it('merges a pair without ticks, into the first product', async () => {
-    fetchNearDuplicates.mockResolvedValue({ rows: [{ ...group, products: group.products.slice(0, 2) }], total: 1, offset: 0 })
-    const wrapper = mountView()
-    await flushPromises()
-
-    expect(wrapper.find('.dup__hint').exists()).toBe(false)
-    await wrapper.find('.dup__same').trigger('click')
-    await flushPromises()
-
-    expect(mergeProducts.mock.calls[0].slice(0, 2)).toEqual(['p-a', 'p-b'])
-  })
-
-  it('keeps the ticked product of a pair', async () => {
-    fetchNearDuplicates.mockResolvedValue({ rows: [{ ...group, products: group.products.slice(0, 2) }], total: 1, offset: 0 })
-    const wrapper = mountView()
-    await flushPromises()
-
-    await wrapper.findAll('.dup input[type="checkbox"]')[1].setValue(true)
+    await wrapper.findAll('.dup input[type="radio"]')[1].setValue(true)
     await wrapper.find('.dup__same').trigger('click')
     await flushPromises()
 
     expect(mergeProducts.mock.calls[0].slice(0, 2)).toEqual(['p-b', 'p-a'])
   })
 
-  it('says every pair in a group is different', async () => {
+  it('says a pair is different', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -149,20 +120,17 @@ describe('DuplicatesView', () => {
     await flushPromises()
 
     expect(rejectGroup).toHaveBeenCalledTimes(1)
-    expect(rejectGroup.mock.calls[0][0]).toEqual(['p-a', 'p-b', 'p-c'])
+    expect(rejectGroup.mock.calls[0][0]).toEqual(['p-a', 'p-b'])
     expect(wrapper.findAll('.dup')).toHaveLength(0)
   })
 
   // Review, 2026-10-08: a failure left the page showing what the loop had
   // already merged, and a retry then failed on every one of those.
-  it('reloads the group after a failed merge, and says why', async () => {
+  it('reloads the pair after a failed merge, and says why', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     mergeProducts.mockRejectedValueOnce(new Error('both products carry a barcode'))
-    const boxes = wrapper.findAll('.dup input[type="checkbox"]')
-    await boxes[0].setValue(true)
-    await boxes[1].setValue(true)
     await wrapper.find('.dup__same').trigger('click')
     await flushPromises()
 

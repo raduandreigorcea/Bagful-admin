@@ -32,10 +32,11 @@ export interface DuplicateProduct {
   retailers: string[]
 }
 
-/** One brand, size and pack, with more than one set of words. */
+/** Two products of one brand, size and pack, worded differently. Most alike first. */
 export interface DuplicateGroup {
+  /** brand | size | pack | id | id: unique per pair. */
   family: string
-  /** The product most shops list first: the natural one to keep. */
+  /** Always two. The one most shops list first: the natural one to keep. */
   products: DuplicateProduct[]
   total: number
 }
