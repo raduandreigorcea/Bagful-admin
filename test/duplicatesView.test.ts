@@ -104,6 +104,18 @@ describe('DuplicatesView', () => {
     expect(wrapper.find('.dup__same').attributes('disabled')).toBeDefined()
   })
 
+  it('says to tick the products until two are ticked', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.dup__hint').text()).toBe('Tick the ones that are the same')
+    const boxes = wrapper.findAll('.dup input[type="checkbox"]')
+    await boxes[0].setValue(true)
+    expect(wrapper.find('.dup__hint').text()).toBe('Tick one more')
+    await boxes[1].setValue(true)
+    expect(wrapper.find('.dup__hint').exists()).toBe(false)
+  })
+
   it('says every pair in a group is different', async () => {
     const wrapper = mountView()
     await flushPromises()
