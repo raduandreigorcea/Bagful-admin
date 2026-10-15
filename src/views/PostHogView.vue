@@ -7,9 +7,11 @@ import StatTile from '../components/StatTile.vue'
 import LineChart from '../components/LineChart.vue'
 import BarChart from '../components/BarChart.vue'
 import { useQuery, describeError } from '../lib/useQuery'
-import { fetchPostHogActivity, serviceProblem } from '../lib/data/services'
+import DataTable from '../components/DataTable.vue'
+import { DASHBOARDS, fetchPostHogActivity, fetchPostHogRecordings, serviceProblem, type PostHogRecording } from '../lib/data/services'
 import type { Bar, Series } from '../lib/uiTypes'
-import { formatCompact, formatCount, formatDayMonth } from '../lib/format'
+import type { Column } from '../lib/uiTypes'
+import { formatCompact, formatCount, formatDayMonth, formatDateTime, formatRelative } from '../lib/format'
 
 // PostHog: what people DO in the app, which the database cannot see because it
 // only learns about writes. Searches, scans, filters, who came back today.
@@ -24,9 +26,32 @@ import { formatCompact, formatCount, formatDayMonth } from '../lib/format'
 // production's events, bagful-dev reads nightly's. Both land in the same
 // PostHog project and are told apart by the `channel` property.
 
-const POSTHOG_DASHBOARD = 'https://eu.posthog.com/project/287898/dashboard/982750'
+const POSTHOG_DASHBOARD = DASHBOARDS.posthog.href
 
 const activity = useQuery((signal) => fetchPostHogActivity(signal))
+
+// The latest session recordings, as links into PostHog's own player. Recordings
+// are the one thing here that is about a person, so the list says nothing about
+// who: when, how long, how many clicks and the page it began on. Who it was is
+// for PostHog to show behind its own login. A failure here (the key may lack
+// access to recordings) is kept to this panel and does not blank the page.
+const recordings = useQuery((signal) => fetchPostHogRecordings(signal))
+
+const recordingColumns: Column<PostHogRecording>[] = [
+  { key: 'startedAt', label: 'Started', width: '30%' },
+  { key: 'seconds', label: 'Length', numeric: true, width: '16%' },
+  { key: 'clicks', label: 'Clicks', numeric: true, width: '14%' },
+  { key: 'startPath', label: 'Began on', width: '25%' },
+  { key: 'url', label: '', width: '15%' },
+]
+
+const asRecording = (row: unknown) => row as PostHogRecording
+
+function lengthOf(seconds: number): string {
+  if (seconds < 60) return `${seconds} s`
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes} min ${String(seconds % 60).padStart(2, '0')} s`
+}
 
 const problem = computed(() => serviceProblem(activity.error.value))
 const loadError = computed(() => {
@@ -83,6 +108,7 @@ const hint = computed(() => `Last ${labels.value.length || 30} days, ${activity.
 <template>
   <div class="page">
     <PageHeader
+      :dashboard="DASHBOARDS.posthog"
       title="PostHog"
       description="What people do in the app, counted per day. No person is ever named here."
       :fetched-at="activity.fetchedAt.value"
@@ -154,8 +180,39 @@ const hint = computed(() => `Last ${labels.value.length || 30} days, ${activity.
         </div>
       </div>
 
+      <PanelCard
+        title="Session recordings"
+        note="The last 30 sessions in 14 days. Open one to watch it in PostHog."
+        :busy="recordings.fetching.value && !recordings.loading.value"
+        flush
+      >
+        <DataTable
+          :columns="recordingColumns"
+          :rows="recordings.data.value ?? []"
+          row-key="id"
+          :loading="recordings.loading.value"
+          :error="recordings.error.value ? describeError(recordings.error.value).detail : ''"
+          empty-title="No recordings"
+          empty-message="No session was recorded in the last 14 days, or recordings are switched off in the app."
+        >
+          <template #cell-startedAt="{ row }">
+            <time v-if="asRecording(row).startedAt" :title="formatDateTime(asRecording(row).startedAt)">
+              {{ formatRelative(asRecording(row).startedAt) }}
+            </time>
+          </template>
+          <template #cell-seconds="{ row }">{{ lengthOf(asRecording(row).seconds) }}</template>
+          <template #cell-clicks="{ row }">{{ formatCount(asRecording(row).clicks) }}</template>
+          <template #cell-startPath="{ row }">
+            <span class="u-mono u-truncate">{{ asRecording(row).startPath ?? '' }}</span>
+          </template>
+          <template #cell-url="{ row }">
+            <a class="u-btn" :href="asRecording(row).url" target="_blank" rel="noopener noreferrer">Watch</a>
+          </template>
+        </DataTable>
+      </PanelCard>
+
       <p class="posthog__more">
-        Funnels, retention and session recordings live in
+        Funnels and retention live in
         <a :href="POSTHOG_DASHBOARD" target="_blank" rel="noopener noreferrer">PostHog itself</a>.
       </p>
     </template>

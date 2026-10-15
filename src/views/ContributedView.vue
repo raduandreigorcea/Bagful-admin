@@ -235,7 +235,7 @@ const SEGMENTS = [
           <span class="u-truncate product__name">{{ row.name }}</span>
         </template>
         <template #cell-maker="{ row }">
-          <span class="u-truncate">{{ row.maker || '--' }}</span>
+          <span class="u-truncate" :class="{ 'u-muted': !row.maker }">{{ row.maker || '--' }}</span>
         </template>
         <template #cell-barcode="{ row }">
           <CopyValue v-if="row.barcode" :value="String(row.barcode)" label="barcode" />

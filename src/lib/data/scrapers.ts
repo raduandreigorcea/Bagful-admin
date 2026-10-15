@@ -435,9 +435,12 @@ export function runMessage(run: Pick<ScrapeRunRow, 'shop' | 'error'>): string | 
   // it could close its own run -- in practice, the nightly time limit.
   if (run.error.startsWith('abandoned:')) return 'Killed before it could finish'
   const prefix = `import failed for ${run.shop}: `
-  const text = run.error.startsWith(prefix)
-    ? `Import failed: ${run.error.slice(prefix.length)}`
-    : run.error
+  // Importers write "-- shard 1/3: ..." as a SQL-style comment; it reads as noise.
+  const error = run.error.replace(/^[-–—\s]+/, '')
+  if (!error) return null
+  const text = error.startsWith(prefix)
+    ? `Import failed: ${error.slice(prefix.length)}`
+    : error
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 

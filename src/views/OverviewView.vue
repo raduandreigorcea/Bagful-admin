@@ -9,6 +9,7 @@ import type { Series } from '../lib/uiTypes'
 import BarChart from '../components/BarChart.vue'
 import PieChart from '../components/PieChart.vue'
 import StateBlock from '../components/StateBlock.vue'
+import StatusPill from '../components/StatusPill.vue'
 import SegmentedControl from '../components/SegmentedControl.vue'
 import { useQuery, useQueryGroup, describeError } from '../lib/useQuery'
 import {

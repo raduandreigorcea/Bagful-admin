@@ -13,6 +13,7 @@ import UserId from '../components/UserId.vue'
 import { useQuery, describeError } from '../lib/useQuery'
 import { useTableState } from '../lib/useTableState'
 import { fetchUsers, isUserSort } from '../lib/data/users'
+import { fetchClerkSummary } from '../lib/data/services'
 import type { AdminUserRow } from '../lib/data/types'
 import type { Column } from '../lib/uiTypes'
 import { formatCount, formatDateTime, formatRelative, shortUserId } from '../lib/format'
@@ -35,6 +36,13 @@ const { query, sort, dir, offset, limit, params, onSort } = useTableState({
 })
 
 const users = useQuery((signal) => fetchUsers(params.value, signal), { watch: [params] })
+
+// How many accounts Clerk holds, beside how many have a profile here: the gap is
+// people who signed in once and never made a list. A failure is not worth a
+// banner, the number just does not appear.
+const clerkTotal = useQuery((signal) =>
+  fetchClerkSummary(signal).then((summary) => summary.total, () => null),
+)
 
 const columns: Column<AdminUserRow>[] = [
   // Nine columns, and the widest header is over the narrowest column, so these
@@ -93,7 +101,8 @@ function activityTone(lastActive: string): 'good' | 'idle' {
           <template #end>
             <!-- Withheld until it is known: see the note in TablePager. -->
             <span v-if="!countUnknown" class="u-toolbar__count u-num">
-              {{ formatCount(total) }} accounts
+              {{ formatCount(total) }} accounts<template v-if="clerkTotal.data.value != null">
+                · {{ formatCount(clerkTotal.data.value) }} in Clerk</template>
             </span>
           </template>
         </FilterBar>

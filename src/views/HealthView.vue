@@ -24,7 +24,6 @@ import {
   reachabilityOf,
   severityOf,
   type RateLimitRow,
-  type TableHealth,
 } from '../lib/data/health'
 import { fetchCatalogStats, catalogConfigured, type RetailerHealth } from '../lib/data/catalog'
 import {
@@ -44,7 +43,6 @@ import { DEFAULT_RANGE, TIME_RANGES, resolveRange, sinceIso } from '../lib/timeR
 import type { AdminEventRow } from '../lib/data/types'
 import type { Column } from '../lib/uiTypes'
 import {
-  formatBytes,
   formatCount,
   formatDateTime,
   formatRelative,
@@ -258,17 +256,6 @@ const kindOptions = computed(() => [
   })),
 ])
 
-const tableColumns: Column<TableHealth>[] = [
-  { key: 'table_name', label: 'Table', width: '22%' },
-  { key: 'live_rows', label: 'Rows', numeric: true, width: '11%', title: 'Planner estimate, not an exact count' },
-  { key: 'dead_rows', label: 'Dead', numeric: true, width: '10%', title: 'Rows awaiting vacuum' },
-  { key: 'total_bytes', label: 'Total', numeric: true, width: '11%' },
-  { key: 'index_bytes', label: 'Indexes', numeric: true, width: '11%', hideBelow: 1100 },
-  { key: 'seq_scan', label: 'Seq scans', numeric: true, width: '11%', hideBelow: 1400 },
-  { key: 'idx_scan', label: 'Index scans', numeric: true, width: '11%', hideBelow: 1400 },
-  { key: 'last_vacuum', label: 'Vacuumed', width: '13%', hideBelow: 1100 },
-]
-
 const eventColumns: Column<AdminEventRow>[] = [
   { key: 'kind', label: 'Event', width: '20%' },
   { key: 'actor_name', label: 'Account', width: '20%' },
@@ -348,17 +335,6 @@ const connectionsHint = computed(() => {
   const c = health.data.value?.connections
   return c ? `of ${c.max} allowed, ${formatCount(c.active)} active` : ''
 })
-
-// Newest first, so a table that stopped receiving rows sinks to the bottom
-// where it stands out against the ones that are still moving.
-const freshness = computed(() =>
-  Object.entries(health.data.value?.freshness ?? {}).sort(([, a], [, b]) => {
-    if (a === b) return 0
-    if (!a) return 1
-    if (!b) return -1
-    return b.localeCompare(a)
-  }),
-)
 
 const migrations = computed(() => health.data.value?.migrations ?? [])
 const newestMigration = computed(() =>
@@ -549,7 +525,7 @@ const allClear = computed(() =>
     </PanelCard>
 
     <div class="grid">
-      <div class="span-6">
+      <div class="span-12">
         <PanelCard
           :id="CONNECTION_PANEL"
           title="Connection"
@@ -601,30 +577,6 @@ const allClear = computed(() =>
         </PanelCard>
       </div>
 
-      <div class="span-6">
-        <PanelCard
-          title="Newest row per table"
-          note="When each table last received a row. One that stopped sinks to the bottom."
-          :busy="refreshing(health)"
-          fill
-        >
-          <StateBlock v-if="health.loading.value" state="loading" :lines="5" compact />
-          <StateBlock
-            v-else-if="health.error.value"
-            state="error"
-            :title="describeError(health.error.value).title"
-            :message="describeError(health.error.value).detail"
-          />
-          <ul v-else class="fresh">
-            <li v-for="[name, value] in freshness" :key="name" class="fresh__row">
-              <span class="fresh__name u-mono">{{ name }}</span>
-              <span class="fresh__when" :class="{ 'fresh__when--empty': !value }" :title="value ? formatDateTime(value) : ''">
-                {{ value ? formatRelative(value) : 'empty' }}
-              </span>
-            </li>
-          </ul>
-        </PanelCard>
-      </div>
     </div>
 
     <PanelCard
@@ -649,7 +601,7 @@ const allClear = computed(() =>
         :loading="events.loading.value"
         :error="events.error.value ? describeError(events.error.value).detail : ''"
         empty-title="Nothing logged"
-        empty-message="No invite code has failed, no rate limit has been hit and no role has changed in this window. That is the normal state."
+        empty-message="No admin action or security event was recorded in this window."
       >
         <template #cell-kind="{ row }">
           <StatusPill
@@ -692,44 +644,6 @@ const allClear = computed(() =>
           @go="eventOffset = $event"
         />
       </template>
-    </PanelCard>
-
-    <PanelCard
-      title="Tables"
-      note="Row counts are planner estimates, so this stays cheap however large the tables get. Exact counts are on the Overview."
-      :busy="refreshing(health)"
-      flush
-    >
-      <DataTable
-        :columns="tableColumns"
-        :rows="tableRows"
-        row-key="table_name"
-        :loading="health.loading.value"
-        empty-title="No table statistics"
-        empty-message="The server reported no user tables in the public schema."
-      >
-        <template #cell-table_name="{ row }">
-          <span class="u-mono">{{ row.table_name }}</span>
-        </template>
-        <template #cell-live_rows="{ row }">{{ formatCount(Number(row.live_rows)) }}</template>
-        <template #cell-dead_rows="{ row }">
-          <span :class="{ 'dead--high': Number(row.dead_rows) > Number(row.live_rows) * 0.2 }">
-            {{ formatCount(Number(row.dead_rows)) }}
-          </span>
-        </template>
-        <template #cell-total_bytes="{ row }">{{ formatBytes(Number(row.total_bytes)) }}</template>
-        <template #cell-index_bytes="{ row }">{{ formatBytes(Number(row.index_bytes)) }}</template>
-        <template #cell-seq_scan="{ row }">{{ formatCount(Number(row.seq_scan)) }}</template>
-        <template #cell-idx_scan="{ row }">
-          {{ row.idx_scan === null ? '--' : formatCount(Number(row.idx_scan)) }}
-        </template>
-        <template #cell-last_vacuum="{ row }">
-          <span v-if="row.last_vacuum" :title="formatDateTime(String(row.last_vacuum))">
-            {{ formatRelative(String(row.last_vacuum)) }}
-          </span>
-          <span v-else class="u-muted">never</span>
-        </template>
-      </DataTable>
     </PanelCard>
 
     <div class="grid">
@@ -1011,47 +925,7 @@ a.check__detail:hover {
   word-break: break-all;
 }
 
-/* ── freshness ────────────────────────────────────────────────────────────── */
-
-.fresh {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.fresh__row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-1-5) 0;
-  font-size: var(--text-sm);
-  border-bottom: var(--border-width-thin) solid var(--border-light);
-}
-
-.fresh__row:last-child {
-  border-bottom: 0;
-}
-
-.fresh__name {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-.fresh__when {
-  color: var(--text-primary);
-  white-space: nowrap;
-}
-
-.fresh__when--empty {
-  color: var(--text-disabled);
-}
-
 /* ── tables, events, migrations ───────────────────────────────────────────── */
-
-.dead--high {
-  color: var(--warning-text);
-  font-weight: var(--weight-semibold);
-}
 
 .migrations {
   list-style: none;

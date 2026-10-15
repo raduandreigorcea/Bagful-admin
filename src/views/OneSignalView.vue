@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
 import PanelCard from '../components/PanelCard.vue'
 import DataTable from '../components/DataTable.vue'
@@ -12,6 +12,8 @@ import {
   pushTotals,
   serviceProblem,
   type PushNotification,
+  DASHBOARDS,
+  sendTestPush,
 } from '../lib/data/services'
 import type { Column } from '../lib/uiTypes'
 import { formatCount, formatDateTime, formatRelative } from '../lib/format'
@@ -47,17 +49,52 @@ const columns: Column<PushNotification>[] = [
 ]
 
 const asRow = (row: unknown) => row as PushNotification
+
+// A test notification to the signed-in admin's own phone, to check push works
+// end to end without waiting for somebody to add an item.
+const testing = ref(false)
+const testResult = ref('')
+const testFailed = ref(false)
+
+async function sendToMe() {
+  if (testing.value) return
+  testing.value = true
+  testResult.value = ''
+  try {
+    const { sent } = await sendTestPush(undefined, new AbortController().signal)
+    testFailed.value = !sent
+    testResult.value =
+      sent
+        ? 'Test sent. It should reach your phone in a few seconds.'
+        : 'Nothing was delivered: your account has no phone subscribed to notifications on this project.'
+    void notifications.refetch()
+  } catch (caught) {
+    testFailed.value = true
+    testResult.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    testing.value = false
+  }
+}
 </script>
 
 <template>
   <div class="page">
     <PageHeader
+      :dashboard="DASHBOARDS.onesignal"
       title="OneSignal"
       description="Push notifications this project sent, newest first, and how many reached a phone."
       :fetched-at="notifications.fetchedAt.value"
       :busy="notifications.fetching.value"
       @refresh="notifications.refetch"
-    />
+    >
+      <template #tools>
+        <button type="button" class="u-btn" :disabled="testing" title="Send a test notification to your own phone" @click="sendToMe">
+          {{ testing ? 'Sending…' : 'Test notification to me' }}
+        </button>
+      </template>
+    </PageHeader>
+
+    <p v-if="testResult" class="os__result" :class="{ 'os__result--bad': testFailed }" role="status">{{ testResult }}</p>
 
     <PanelCard v-if="problem" title="OneSignal">
       <StateBlock state="empty" :title="problem.title" :message="problem.message" />
@@ -125,6 +162,22 @@ const asRow = (row: unknown) => row as PushNotification
 </template>
 
 <style scoped>
+.os__result {
+  margin: 0;
+  padding: var(--space-3);
+  border: var(--border-width-thin) solid var(--border-main);
+  border-radius: var(--radius-md);
+  background: var(--bg-main);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.os__result--bad {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
 .push__text {
   display: flex;
   align-items: center;

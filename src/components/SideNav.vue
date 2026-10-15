@@ -46,19 +46,23 @@ function isActive(to: string): boolean {
   return route.path === to || route.path.startsWith(`${to}/`)
 }
 
-const groups: { heading: string; items: NavItem[] }[] = [
+interface NavGroup {
+  heading: string
+  /** Not tied to the selected project: the same pages whichever one is chosen. */
+  shared?: boolean
+  items: NavItem[]
+}
+
+// Two kinds of page, and the rail says which. The first three groups read the
+// app database the switcher points at, so they change when you switch. The
+// catalog group reads the one catalog project both apps share, so it does not.
+// Mixing them (Catalog used to sit under Overview) made the switcher look
+// broken: you changed project and the product numbers stayed put.
+const groups: NavGroup[] = [
   {
-    heading: 'Monitor',
+    heading: 'App',
     items: [
       { to: '/', label: 'Overview', icon: 'layout-grid', title: 'System totals, activity and what just happened' },
-      { to: '/catalog', label: 'Catalog', icon: 'package-search', title: 'The reference products the app ships and discovers, shared by production and development' },
-      { to: '/duplicates', label: 'Duplicates', icon: 'copy', title: 'Products two shops wrote differently: merge them, or say they differ' },
-      { to: '/scrapers', label: 'Scrapers', icon: 'workflow', title: 'Each shop being read into the catalog: what is running now and how the last runs ended' },
-    ],
-  },
-  {
-    heading: 'People',
-    items: [
       { to: '/users', label: 'Users', icon: 'users-round', title: 'Every account, what it belongs to and what it does' },
       { to: '/lists', label: 'Lists', icon: 'house', title: 'Groups, rosters, lists and buying patterns' },
       { to: '/contributed', label: 'Contributed', icon: 'package-search', title: 'Products lists typed themselves, and the ones promoted out of them' },
@@ -83,12 +87,21 @@ const groups: { heading: string; items: NavItem[] }[] = [
       { to: '/services/clerk', label: 'Clerk', icon: 'brand-clerk', title: 'Accounts in the sign-in service and how they sign in' },
     ],
   },
+  {
+    heading: 'Catalog · both projects',
+    shared: true,
+    items: [
+      { to: '/catalog', label: 'Catalog', icon: 'package-search', title: 'The reference products the app ships and discovers, shared by production and development' },
+      { to: '/duplicates', label: 'Duplicates', icon: 'copy', title: 'Products two shops wrote differently: merge them, or say they differ' },
+      { to: '/scrapers', label: 'Scrapers', icon: 'workflow', title: 'Each shop being read into the catalog: what is running now and how the last runs ended' },
+    ],
+  },
 ]
 </script>
 
 <template>
   <nav class="nav" :class="{ 'nav--collapsed': collapsed, 'nav--open': open }" aria-label="Sections">
-    <div v-for="group in groups" :key="group.heading" class="nav__group">
+    <div v-for="group in groups" :key="group.heading" class="nav__group" :class="{ 'nav__group--shared': group.shared }">
       <h2 v-if="!collapsed || open" class="nav__heading u-caption">{{ group.heading }}</h2>
       <RouterLink
         v-for="item in group.items"
@@ -181,6 +194,12 @@ const groups: { heading: string; items: NavItem[] }[] = [
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* A rule above the shared group: the boundary the project switcher does not cross. */
+.nav__group--shared {
+  padding-top: var(--space-4);
+  border-top: var(--border-width-thin) solid var(--admin-chrome-edge);
 }
 
 .nav__heading {

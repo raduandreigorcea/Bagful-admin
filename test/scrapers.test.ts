@@ -464,6 +464,10 @@ describe('expectedCount', () => {
 })
 
 describe('runMessage', () => {
+  it('drops the leading dashes an importer writes', () => {
+    expect(runMessage({ shop: 'x', error: '-- shard 1/3: one slice' })).toBe('Shard 1/3: one slice')
+  })
+
   it('drops the shop from an import failure, since the page already names it', () => {
     expect(runMessage({ shop: 'auchan', error: 'import failed for auchan: Gateway Timeout' })).toBe(
       'Import failed: Gateway Timeout',
