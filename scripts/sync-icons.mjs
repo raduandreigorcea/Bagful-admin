@@ -80,6 +80,7 @@ const ICONS = [
   'circle',           // an unmet quality band
   'ellipsis',
   'list-filter',      // the catalog's filter drawer
+  'external-link',    // a link to a service's own dashboard
 
   // status
   'triangle-alert',

@@ -116,7 +116,7 @@ const slices = computed(() => {
 .pie__legend {
   /* Eleven rows do not fit beside the ring in a quarter-width panel; below
      that width the legend drops under it. */
-  flex: 1 1 200px;
+  flex: 1 1 230px;
   min-width: 0;
   margin: 0;
   padding: 0;

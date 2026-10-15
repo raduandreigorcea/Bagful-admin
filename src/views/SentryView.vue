@@ -10,9 +10,12 @@ import { useQuery, describeError } from '../lib/useQuery'
 import {
   fetchSentryFeedback,
   fetchSentryIssues,
+  setSentryIssueStatus,
+  type IssueAction,
   serviceProblem,
   type SentryFeedback,
   type SentryIssue,
+  DASHBOARDS,
 } from '../lib/data/services'
 import type { Column, Segment, Tone } from '../lib/uiTypes'
 import { formatCount, formatDateTime, formatRelative } from '../lib/format'
@@ -81,18 +84,20 @@ function statusOf(status: string) {
 }
 
 const issueColumns: Column<SentryIssue>[] = [
-  { key: 'title', label: 'Error', width: '52%' },
+  { key: 'title', label: 'Error', width: '42%' },
   { key: 'level', label: 'Level', width: '10%', hideBelow: 1100 },
   { key: 'events', label: 'Events', numeric: true, width: '10%' },
   { key: 'users', label: 'People', numeric: true, width: '10%' },
-  { key: 'lastSeen', label: 'Last seen', width: '18%' },
+  { key: 'lastSeen', label: 'Last seen', width: '14%' },
+  { key: 'actions', label: '', width: '14%' },
 ]
 
 const feedbackColumns: Column<SentryFeedback>[] = [
-  { key: 'message', label: 'What they wrote', width: '52%' },
+  { key: 'message', label: 'What they wrote', width: '42%' },
   { key: 'name', label: 'From', width: '20%' },
   { key: 'status', label: 'Status', width: '12%' },
-  { key: 'at', label: 'Sent', width: '16%' },
+  { key: 'at', label: 'Sent', width: '12%' },
+  { key: 'actions', label: '', width: '14%' },
 ]
 
 const asIssue = (row: unknown) => row as SentryIssue
@@ -101,11 +106,32 @@ const asFeedback = (row: unknown) => row as SentryFeedback
 function refresh() {
   void current.value.refetch()
 }
+
+// Changing an issue's status from here. Not confirmed: every one is undone by the
+// opposite button, and Sentry keeps the history.
+const working = ref<string | null>(null)
+const actionError = ref('')
+
+async function setStatus(id: string, action: IssueAction) {
+  if (working.value) return
+  working.value = id
+  actionError.value = ''
+  try {
+    await setSentryIssueStatus(id, action, new AbortController().signal)
+    await current.value.refetch()
+  } catch (caught) {
+    const unavailable = serviceProblem(caught instanceof Error ? caught : null)
+    actionError.value = unavailable ? unavailable.message : caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    working.value = null
+  }
+}
 </script>
 
 <template>
   <div class="page">
     <PageHeader
+      :dashboard="DASHBOARDS.sentry"
       title="Sentry"
       description="Errors the app reported and feedback people sent from it. Every link opens the issue in Sentry."
       :fetched-at="current.fetchedAt.value"
@@ -121,6 +147,8 @@ function refresh() {
         />
       </template>
     </PageHeader>
+
+    <p v-if="actionError" class="svc__error" role="alert">{{ actionError }}</p>
 
     <PanelCard v-if="problem" title="Sentry">
       <StateBlock state="empty" :title="problem.title" :message="problem.message" />
@@ -157,6 +185,12 @@ function refresh() {
         <template #cell-users="{ row }">{{ formatCount(asIssue(row).users) }}</template>
         <template #cell-lastSeen="{ row }">
           <time :title="formatDateTime(asIssue(row).lastSeen)">{{ formatRelative(asIssue(row).lastSeen) }}</time>
+        </template>
+        <template #cell-actions="{ row }">
+          <span class="svc__actions">
+            <button type="button" class="u-btn" :disabled="working !== null" @click="setStatus(asIssue(row).id, 'resolve')">Resolve</button>
+            <button type="button" class="u-btn" :disabled="working !== null" @click="setStatus(asIssue(row).id, 'ignore')">Archive</button>
+          </span>
         </template>
       </DataTable>
     </PanelCard>
@@ -198,12 +232,52 @@ function refresh() {
         <template #cell-at="{ row }">
           <time :title="formatDateTime(asFeedback(row).at)">{{ formatRelative(asFeedback(row).at) }}</time>
         </template>
+        <template #cell-actions="{ row }">
+          <span class="svc__actions">
+            <button
+              v-if="asFeedback(row).status !== 'resolved'"
+              type="button"
+              class="u-btn"
+              :disabled="working !== null"
+              @click="setStatus(asFeedback(row).id, 'resolve')"
+            >Resolve</button>
+            <button
+              v-if="asFeedback(row).status === 'unresolved'"
+              type="button"
+              class="u-btn"
+              :disabled="working !== null"
+              @click="setStatus(asFeedback(row).id, 'ignore')"
+            >Archive</button>
+            <button
+              v-if="asFeedback(row).status !== 'unresolved'"
+              type="button"
+              class="u-btn"
+              :disabled="working !== null"
+              @click="setStatus(asFeedback(row).id, 'unresolve')"
+            >Reopen</button>
+          </span>
+        </template>
       </DataTable>
     </PanelCard>
   </div>
 </template>
 
 <style scoped>
+.svc__actions {
+  display: inline-flex;
+  gap: var(--space-1-5);
+}
+
+.svc__error {
+  margin: 0;
+  padding: var(--space-3);
+  border: var(--border-width-thin) solid var(--danger-border);
+  border-radius: var(--radius-md);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  font-size: var(--text-sm);
+}
+
 .svc__link {
   display: flex;
   flex-direction: column;

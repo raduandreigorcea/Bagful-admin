@@ -187,22 +187,70 @@ export function clerkIssuer(): string | null {
 // Supabase. HTTP responses are never retried, and neither are mutations.
 const RETRY_DELAYS_MS = [250, 750]
 
-async function fetchWithRetry(url: RequestInfo | URL, options: RequestInit = {}): Promise<Response> {
+// Nearly everything this dashboard reads is an RPC, and an RPC is a POST, so
+// "GET only" retried almost nothing. These are the RPCs and the edge function
+// that only read, named one by one: forgetting a new read costs a retry, whereas
+// forgetting a new write on a denylist would run it twice.
+const READ_RPC =
+  /^(is_admin|catalog_stats|admin_(lists|list_detail|list_users|list_admins|deleted_lists|overview|activity_series|health|event_digest|security_events|rate_limits|local_products|user_detail|banned_users)|catalog_admin_(products|near_duplicates|merges|run_listings))$/
+
+export function isSafeToRepeat(url: RequestInfo | URL, method: string): boolean {
+  if (method === 'GET' || method === 'HEAD') return true
+  if (method !== 'POST') return false
+  const path = new URL(typeof url === 'string' || url instanceof URL ? url : url.url).pathname
+  if (path === '/functions/v1/admin-services') return true
+  const rpc = /^\/rest\/v1\/rpc\/([^/]+)$/.exec(path)
+  return Boolean(rpc && READ_RPC.test(rpc[1]))
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+export async function fetchWithRetry(url: RequestInfo | URL, options: RequestInit = {}): Promise<Response> {
   const method = (options.method || 'GET').toUpperCase()
-  const retriable = method === 'GET' || method === 'HEAD'
+  const retriable = isSafeToRepeat(url, method)
+  let init = options
+  let refreshed = false
   for (let attempt = 0; ; attempt++) {
     try {
-      return await fetch(url, options)
+      const response = await fetch(url, init)
+      // An expired or not-yet-valid session token (a tab that sat in the
+      // background, a clock a few seconds off) comes back as 401. Ask Clerk for a
+      // brand-new one and repeat once; anything else is returned as it is.
+      if (response.status === 401 && retriable && !refreshed && getTokenFn) {
+        refreshed = true
+        const token = await getTokenFn(true)
+        if (token) {
+          const headers = new Headers(init.headers)
+          headers.set('Authorization', `Bearer ${token}`)
+          init = { ...init, headers }
+          continue
+        }
+      }
+      return response
     } catch (error) {
       const aborted =
         options.signal?.aborted || (error as { name?: string })?.name === 'AbortError'
       if (!retriable || aborted || attempt >= RETRY_DELAYS_MS.length) throw error
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]))
+      await sleep(RETRY_DELAYS_MS[attempt])
     }
   }
 }
 
-let getTokenFn: (() => Promise<string | null>) | null = null
+type TokenResolver = (fresh?: boolean) => Promise<string | null>
+let getTokenFn: TokenResolver | null = null
+
+// Clerk can answer null for a moment right after it loads or wakes. Sending that
+// as "no token" made the request anonymous, which the database rightly refused
+// as 42501 -- a panel saying "Not authorised" to an admin. Wait a beat instead.
+async function resolveToken(): Promise<string | null> {
+  if (!getTokenFn) return null
+  for (const delay of [0, 200, 600]) {
+    if (delay) await sleep(delay)
+    const token = await getTokenFn()
+    if (token) return token
+  }
+  return null
+}
 
 function clientOptions() {
   return {
@@ -211,7 +259,7 @@ function clientOptions() {
     // Shared by every client here: one Clerk session authenticates all three
     // projects, because all three name that issuer in their Third-Party Auth
     // settings.
-    accessToken: async () => (getTokenFn ? await getTokenFn() : null),
+    accessToken: resolveToken,
     global: { fetch: fetchWithRetry },
   }
 }
@@ -263,7 +311,7 @@ export function getCatalogSupabase(): SupabaseClient | null {
  * is plain functions that run outside any component context and useAuth() needs
  * one. Same split Bagful makes.
  */
-export function setTokenResolver(resolve: () => Promise<string | null>): void {
+export function setTokenResolver(resolve: TokenResolver): void {
   getTokenFn = resolve
 }
 
@@ -287,5 +335,5 @@ export function useSupabaseAuthBridge(): void {
   //
   // It also removes a dependency on a template configured in the Clerk dashboard
   // and described nowhere in either repo.
-  setTokenResolver(async () => getToken.value())
+  setTokenResolver(async (fresh) => getToken.value(fresh ? { skipCache: true } : undefined))
 }

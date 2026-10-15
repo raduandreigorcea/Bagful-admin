@@ -82,6 +82,16 @@ export interface ClerkSummary {
   recent: ClerkUser[]
 }
 
+// Where each service's own dashboard lives, for the "Open in" button on its page.
+// None of these is a secret: they are the public addresses a person signs in at.
+// OneSignal's id is the production app's, the one the app ships in its bundle.
+export const DASHBOARDS = {
+  sentry: { label: 'Open Sentry', href: 'https://bagful.sentry.io/issues/' },
+  onesignal: { label: 'Open OneSignal', href: 'https://dashboard.onesignal.com/apps/e6346de4-1112-4985-a974-7a4e4838bc8f' },
+  posthog: { label: 'Open PostHog', href: 'https://eu.posthog.com/project/287898/dashboard/982750' },
+  clerk: { label: 'Open Clerk', href: 'https://dashboard.clerk.com/last-active?path=users' },
+} as const
+
 const SERVICE_NAMES: Record<Service, string> = { sentry: 'Sentry', onesignal: 'OneSignal', clerk: 'Clerk', posthog: 'PostHog' }
 
 /**
@@ -133,7 +143,7 @@ async function failure(service: Service, error: unknown): Promise<Error> {
   return new Error(`admin-services/${service}: ${message}`)
 }
 
-async function ask<T>(body: { service: Service; view: string; userId?: string }, signal: AbortSignal): Promise<T> {
+async function ask<T>(body: { service: Service } & Record<string, unknown>, signal: AbortSignal): Promise<T> {
   const { data, error } = await getAppSupabase().functions.invoke('admin-services', { body, signal })
   if (error) throw await failure(body.service, error)
   return (data as { data: T }).data
@@ -188,4 +198,59 @@ export function pushTotals(rows: PushNotification[]) {
     }),
     { delivered: 0, unsubscribed: 0, errored: 0 },
   )
+}
+
+// ─── things the dashboard can do ─────────────────────────────────────────────
+//
+// Each is a request with an `action`, answered by the same admin-services
+// function after the same is_admin() check. They never retry (fetchWithRetry
+// only repeats reads) and each page asks the person to confirm the destructive
+// ones before calling.
+
+/** A person found by email or name, from all of Clerk and not just the latest sign-ins. */
+export function searchClerkUsers(query: string, signal: AbortSignal): Promise<ClerkUser[]> {
+  return ask({ service: 'clerk', view: 'search', query }, signal)
+}
+
+export function banClerkUser(userId: string, signal: AbortSignal): Promise<ClerkUser> {
+  return ask({ service: 'clerk', action: 'ban', userId }, signal)
+}
+
+export function unbanClerkUser(userId: string, signal: AbortSignal): Promise<ClerkUser> {
+  return ask({ service: 'clerk', action: 'unban', userId }, signal)
+}
+
+/** Signs the person out of every device. Returns how many sessions it ended. */
+export function revokeClerkSessions(userId: string, signal: AbortSignal): Promise<{ revoked: number }> {
+  return ask({ service: 'clerk', action: 'revoke_sessions', userId }, signal)
+}
+
+/** A one-time link that signs in AS this person for ten minutes. Treat it like a password. */
+export function impersonateClerkUser(userId: string, signal: AbortSignal): Promise<{ url: string | null }> {
+  return ask({ service: 'clerk', action: 'impersonate', userId }, signal)
+}
+
+export type IssueAction = 'resolve' | 'ignore' | 'unresolve'
+
+export function setSentryIssueStatus(issueId: string, action: IssueAction, signal: AbortSignal): Promise<{ ok: true }> {
+  return ask({ service: 'sentry', action, issueId }, signal)
+}
+
+/** A test notification to one account; with no id, to the signed-in admin. */
+export function sendTestPush(userId: string | undefined, signal: AbortSignal): Promise<{ sent: boolean }> {
+  return ask({ service: 'onesignal', action: 'test_push', ...(userId ? { userId } : {}) }, signal)
+}
+
+export interface PostHogRecording {
+  id: string
+  startedAt: string | null
+  seconds: number
+  clicks: number
+  startPath: string | null
+  /** The recording in PostHog's own player. */
+  url: string
+}
+
+export function fetchPostHogRecordings(signal: AbortSignal): Promise<PostHogRecording[]> {
+  return ask({ service: 'posthog', view: 'recordings' }, signal)
 }

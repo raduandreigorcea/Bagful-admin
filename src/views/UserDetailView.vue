@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useQuery, describeError } from '../lib/useQuery'
 import { crumbOf, useLeafCrumb } from '../lib/breadcrumb'
 import { banUser, fetchUserDetail, unbanUser } from '../lib/data/users'
+import ClerkAccountActions from '../components/ClerkAccountActions.vue'
 import { fetchClerkUser, methodsLabel, serviceProblem } from '../lib/data/services'
 import { formatCount, formatDateTime, formatRelative, humanizeKind } from '../lib/format'
 
@@ -352,6 +353,9 @@ const membershipNote = computed(() => {
             </dd>
           </div>
         </dl>
+        <div v-if="clerkUser" class="signin__actions">
+          <ClerkAccountActions :user="clerkUser" @changed="clerk.refetch" />
+        </div>
       </PanelCard>
 
       <PanelCard
@@ -414,6 +418,12 @@ const membershipNote = computed(() => {
 </template>
 
 <style scoped>
+.signin__actions {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--border-width-thin) solid var(--border-light);
+}
+
 .reason {
   width: 100%;
   height: 34px;

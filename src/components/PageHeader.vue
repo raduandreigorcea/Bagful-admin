@@ -23,6 +23,8 @@ defineProps({
   description: { type: String, default: '' },
   fetchedAt: { type: Number as PropType<number | null>, default: null },
   busy: { type: Boolean, default: false },
+  /** The service's own dashboard, opened in a new tab beside Refresh. */
+  dashboard: { type: Object as PropType<{ label: string; href: string } | null>, default: null },
 })
 
 const emit = defineEmits<{ (e: 'refresh'): void }>()
@@ -45,6 +47,18 @@ const icon = computed(() => (typeof route.meta.icon === 'string' ? route.meta.ic
 
     <div class="head__tools">
       <slot name="tools" />
+
+      <a
+        v-if="dashboard"
+        class="u-btn"
+        :href="dashboard.href"
+        target="_blank"
+        rel="noopener noreferrer"
+        :title="`Open ${dashboard.label} in a new tab`"
+      >
+        <AppIcon name="external-link" :size="13" />
+        {{ dashboard.label }}
+      </a>
 
       <!-- The stamp hangs under Refresh instead of sitting beside it. Beside it,
            every change of wording -- "now", "30 s ago", "2 min ago" -- changed
@@ -149,6 +163,10 @@ const icon = computed(() => (typeof route.meta.icon === 'string' ? route.meta.ic
   color: var(--text-secondary);
   line-height: var(--leading-snug);
   max-width: 78ch;
+}
+
+.head__tools a.u-btn {
+  text-decoration: none;
 }
 
 .head__tools {

@@ -89,7 +89,7 @@ const goToPage = (n: number) => emit('go', (n - 1) * props.limit)
       </template>
     </p>
 
-    <nav class="pager__controls" aria-label="Pages">
+    <nav v-if="unknown || total > 0" class="pager__controls" aria-label="Pages">
       <button
         type="button"
         class="pager__btn"
