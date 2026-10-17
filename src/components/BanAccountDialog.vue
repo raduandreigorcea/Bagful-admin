@@ -5,21 +5,13 @@ import ConfirmDialog from './ConfirmDialog.vue'
 import UserAvatar from './UserAvatar.vue'
 import FilterBar from './FilterBar.vue'
 import { useQuery } from '../lib/useQuery'
-import { banUser, fetchUsers } from '../lib/data/users'
-import { banClerkUser } from '../lib/data/services'
+import { fetchUsers } from '../lib/data/users'
+import { banEverywhere } from '../lib/banAccount'
 import type { AdminUserRow } from '../lib/data/types'
 
-// Bans an account in the app and in Clerk in one go.
-//
-// They are two different refusals. The app's ban stops the account opening
-// Bagful and keeps its lists; Clerk's stops it signing in at all and ends its
-// sessions. Doing both used to mean two pages and two dialogs, so this does them
-// together, each on by default and each switchable off for the case where only
-// one is wanted.
-//
-// The app goes first: it is the one this dashboard owns and the one a reader of
-// the Bans page sees. If Clerk then fails, the app ban STANDS and the dialog says
-// so, with the app box locked, so pressing the button again retries only Clerk.
+// Bans an account, in Bagful and in Clerk at once. There is one kind of ban and it
+// is both (lib/banAccount); this dialog only picks who and why. If the server could
+// only close one door it says which, and pressing Ban again finishes it.
 
 const props = defineProps({ open: { type: Boolean, default: false } })
 const emit = defineEmits<{ (e: 'close'): void; (e: 'banned'): void }>()
@@ -29,9 +21,6 @@ const { user: me } = useUser()
 const query = ref('')
 const picked = ref<AdminUserRow | null>(null)
 const reason = ref('')
-const inApp = ref(true)
-const inClerk = ref(true)
-const appDone = ref(false)
 const busy = ref(false)
 const error = ref('')
 
@@ -51,9 +40,6 @@ watch(
     query.value = ''
     picked.value = null
     reason.value = ''
-    inApp.value = true
-    inClerk.value = true
-    appDone.value = false
     error.value = ''
   },
 )
@@ -64,43 +50,20 @@ function pick(row: AdminUserRow) {
 }
 
 const name = computed(() => picked.value?.display_name || 'this account')
-const canSubmit = computed(() => Boolean(picked.value) && (inApp.value || inClerk.value))
-
-const confirmLabel = computed(() => {
-  if (inApp.value && inClerk.value) return 'Ban in both'
-  return inApp.value ? 'Ban in the app' : 'Ban in Clerk'
-})
+const canSubmit = computed(() => Boolean(picked.value))
 
 async function run() {
   const target = picked.value
   if (!target) return
-  if (!canSubmit.value) {
-    error.value = 'Pick at least one place to ban the account.'
-    return
-  }
   if (busy.value) return
   busy.value = true
   error.value = ''
-  const signal = new AbortController().signal
   try {
-    if (inApp.value && !appDone.value) {
-      await banUser(target.user_id, reason.value.trim(), signal)
-      appDone.value = true
-      emit('banned')
-    }
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : String(caught)
-    busy.value = false
-    return
-  }
-  try {
-    if (inClerk.value) await banClerkUser(target.user_id, signal)
+    await banEverywhere(target.user_id, reason.value, new AbortController().signal)
+    emit('banned')
     emit('close')
   } catch (caught) {
-    const why = caught instanceof Error ? caught.message : String(caught)
-    error.value = appDone.value
-      ? `Banned in the app, but Clerk refused: ${why} Press again to retry Clerk only.`
-      : why
+    error.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
     busy.value = false
   }
@@ -112,9 +75,9 @@ async function run() {
     :open="open"
     title="Ban an account"
     :message="picked
-      ? `${name} will be refused wherever you leave a box ticked. Nothing is deleted, and lifting a ban puts them straight back.`
+      ? `${name} will be refused in Bagful and in Clerk. Nothing is deleted, and lifting a ban puts them straight back.`
       : 'Find the account by name, then choose where to ban it.'"
-    :confirm-label="confirmLabel"
+    confirm-label="Ban"
     tone="danger"
     :busy="busy"
     :error="error"
@@ -140,26 +103,8 @@ async function run() {
       <div class="ban__picked">
         <UserAvatar :id="picked.user_id" :src="picked.image_url" :name="picked.display_name" :size="22" />
         <span class="ban__name u-truncate">{{ picked.display_name }}</span>
-        <button type="button" class="ban__change" :disabled="busy || appDone" @click="picked = null">Change</button>
+        <button type="button" class="ban__change" :disabled="busy" @click="picked = null">Change</button>
       </div>
-
-      <fieldset class="ban__where" :disabled="busy">
-        <legend class="u-sr">Where to ban</legend>
-        <label class="ban__check">
-          <input v-model="inApp" type="checkbox" :disabled="appDone" />
-          <span>
-            <strong>Bagful</strong>
-            <small>{{ appDone ? 'Already banned' : 'Refused at the door. Their lists stay.' }}</small>
-          </span>
-        </label>
-        <label class="ban__check">
-          <input v-model="inClerk" type="checkbox" />
-          <span>
-            <strong>Clerk</strong>
-            <small>Cannot sign in, and every session ends.</small>
-          </span>
-        </label>
-      </fieldset>
 
       <input
         v-model="reason"
@@ -167,7 +112,7 @@ async function run() {
         type="text"
         placeholder="Why? This goes into the audit trail."
         aria-label="Reason"
-        :disabled="busy || appDone"
+        :disabled="busy"
         @keydown.enter.prevent="run"
       />
     </template>
@@ -177,7 +122,6 @@ async function run() {
 <style scoped>
 .ban__find,
 .ban__picked,
-.ban__where,
 .ban__reason {
   margin-top: var(--space-3);
 }
@@ -234,35 +178,6 @@ async function run() {
   font-size: var(--text-xs);
   color: var(--color-primary);
   cursor: pointer;
-}
-
-.ban__where {
-  display: grid;
-  gap: var(--space-2);
-  padding: 0;
-  border: 0;
-}
-
-.ban__check {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.ban__check input {
-  margin-top: 3px;
-}
-
-.ban__check span {
-  display: grid;
-}
-
-.ban__check small {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
 }
 
 .ban__reason {

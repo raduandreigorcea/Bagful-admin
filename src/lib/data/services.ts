@@ -213,6 +213,15 @@ export function fetchPushNotifications(signal: AbortSignal): Promise<PushNotific
   return ask({ service: 'onesignal', view: 'notifications' }, signal)
 }
 
+/** How many times an event happened in the last `days` days of an activity answer, all breakdowns summed. */
+export function recentCount(activity: PostHogActivity, event: string, days: number): number {
+  let total = 0
+  for (const values of Object.values(activity.counts[event] ?? {})) {
+    for (const value of values.slice(-days)) total += value
+  }
+  return total
+}
+
 export function fetchPostHogActivity(signal: AbortSignal): Promise<PostHogActivity> {
   return ask({ service: 'posthog', view: 'activity' }, signal)
 }
@@ -229,6 +238,8 @@ export function fetchClerkUser(userId: string, signal: AbortSignal): Promise<Cle
 const METHOD_LABELS: Record<string, string> = {
   google: 'Google',
   apple: 'Apple',
+  microsoft: 'Microsoft',
+  github: 'GitHub',
   facebook: 'Facebook',
   password: 'Password',
   email: 'Email code',
@@ -284,16 +295,21 @@ export function deviceLabel(device: PushDevice): string {
  * The Devices cell: "Android · Pixel 7 ×19, Android · moto g(60)s".
  *
  * OneSignal opens a new subscription on every reinstall and keeps the old ones,
- * so one phone can be twenty rows. Equal devices are counted instead of listed,
- * and when anything is subscribed only the subscribed ones are shown: the dead
- * ones are history, not where a push would go.
+ * so one phone can be twenty rows, most of them still marked enabled. Each device
+ * is named once (the count is for the cell's tooltip, see subscriptionCount), and
+ * when anything is subscribed only the subscribed ones are shown: the dead ones
+ * are history, not where a push would go.
  */
 export function deviceSummary(devices: PushDevice[]): string {
   const live = devices.filter((d) => d.enabled)
   const shown = live.length ? live : devices
-  const counts = new Map<string, number>()
-  for (const device of shown) counts.set(deviceLabel(device), (counts.get(deviceLabel(device)) ?? 0) + 1)
-  return [...counts].map(([label, n]) => (n > 1 ? `${label} ×${n}` : label)).join(', ')
+  return [...new Set(shown.map(deviceLabel))].join(', ')
+}
+
+/** How many OneSignal subscriptions sit behind a summary: reinstalls, not phones. */
+export function subscriptionCount(devices: PushDevice[]): number {
+  const live = devices.filter((d) => d.enabled)
+  return (live.length ? live : devices).length
 }
 
 export type PushKind = 'added' | 'bought' | 'test'
@@ -370,8 +386,17 @@ export function searchClerkUsers(query: string, signal: AbortSignal): Promise<Cl
   return ask({ service: 'clerk', view: 'search', query }, signal)
 }
 
-export function banClerkUser(userId: string, signal: AbortSignal): Promise<ClerkUser> {
-  return ask({ service: 'clerk', action: 'ban', userId }, signal)
+/** Every banned Clerk account. Owners only, like search: it names accounts. */
+export function fetchClerkBanned(signal: AbortSignal): Promise<ClerkUser[]> {
+  return ask({ service: 'clerk', view: 'banned' }, signal)
+}
+
+/**
+ * THE ban. One call, and admin-services closes both doors: Clerk (no sign-in, every
+ * session ended) and Bagful's own flag (refused at the door). `reason` is the audit text.
+ */
+export function banClerkUser(userId: string, signal: AbortSignal, reason = ''): Promise<ClerkUser> {
+  return ask({ service: 'clerk', action: 'ban', userId, reason }, signal)
 }
 
 export function unbanClerkUser(userId: string, signal: AbortSignal): Promise<ClerkUser> {

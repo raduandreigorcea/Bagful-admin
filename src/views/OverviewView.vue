@@ -20,6 +20,7 @@ import {
   searchVolume,
 } from '../lib/data/overview'
 import { probeProjects } from '../lib/data/health'
+import { fetchPostHogActivity, recentCount } from '../lib/data/services'
 import { catalogConfigured, fetchCatalogStats } from '../lib/data/catalog'
 import { countryName } from '../lib/data/scrapers'
 import { DEFAULT_RANGE, TIME_RANGES, bucketLabel, resolveRange } from '../lib/timeRange'
@@ -106,6 +107,23 @@ const catalogCountries = computed(() =>
   })),
 )
 
+// The database cannot count searches, but PostHog does (one event per search). Asked
+// separately and allowed to fail: where PostHog is not connected the tile goes back to
+// saying the database does not record them. PostHog keeps 30 days of daily counts, so a
+// longer window shows 30.
+const posthog = useQuery((signal) => fetchPostHogActivity(signal))
+const searchDays = computed(() => Math.min(30, Math.max(1, Math.ceil(range.value.hours / 24))))
+const searchCount = computed(() =>
+  posthog.data.value ? recentCount(posthog.data.value, 'search_performed', searchDays.value) : null,
+)
+// Daily searches for the sparkline: at least a week, so a one-day window still draws a line.
+const searchSpark = computed(() => {
+  const parts = Object.values(posthog.data.value?.counts.search_performed ?? {})
+  const days = parts.reduce((n, values) => Math.max(n, values.length), 0)
+  const daily = Array.from({ length: days }, (_, i) => parts.reduce((sum, values) => sum + (values[i] ?? 0), 0))
+  return daily.slice(-Math.max(7, searchDays.value))
+})
+const searchHint = computed(() => `PostHog, last ${searchDays.value} day${searchDays.value === 1 ? '' : 's'}`)
 const searches = searchVolume(DEFAULT_RANGE)
 
 const overviewError = computed(() => describeError(overview.error.value))
@@ -115,7 +133,7 @@ const overviewError = computed(() => describeError(overview.error.value))
   <div class="page">
     <PageHeader
       title="Overview"
-      description="Totals as they stand now, and what moved inside the chosen window. Every number is read live from the app database."
+      description="Totals as they stand now, and what moved inside the chosen window. Read live from the app database; searches come from PostHog."
       :fetched-at="page.fetchedAt.value"
       :busy="page.busy.value"
       @refresh="page.refresh"
@@ -187,8 +205,13 @@ const overviewError = computed(() => describeError(overview.error.value))
         <div class="span-2">
           <StatTile
             label="Searches"
-            :unrecorded="!searches.available"
-            :unrecorded-reason="searches.available ? '' : 'search_catalog() writes nothing'"
+            :value="searchCount"
+            :spark="searchSpark"
+            spark-color="var(--chart-3)"
+            :hint="searchHint"
+            :loading="posthog.loading.value"
+            :unrecorded="!posthog.loading.value && searchCount === null && !searches.available"
+            :unrecorded-reason="searches.available ? '' : 'search_catalog() writes nothing, and PostHog did not answer'"
           />
         </div>
       </div>

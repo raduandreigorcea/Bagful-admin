@@ -195,7 +195,7 @@ const SEGMENTS = [
       </template>
     </PageHeader>
 
-    <PanelCard title="Products" note="Added by people to their lists, not scraped from a shop." flush>
+    <PanelCard flush>
       <template #actions>
         <SegmentedControl
           :model-value="scope"

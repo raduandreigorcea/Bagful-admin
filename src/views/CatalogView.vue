@@ -333,7 +333,7 @@ const removalMessage = computed(() => {
       message="Set VITE_CATALOG_SUPABASE_URL and VITE_CATALOG_SUPABASE_ANON_KEY to read it. Every other section is unaffected."
     />
 
-    <PanelCard v-else title="Products" note="One row per product, however many shops sell it. From is the cheapest shop's price." flush>
+    <PanelCard v-else flush>
       <div class="u-toolbar">
         <FilterBar
           v-model="query"
