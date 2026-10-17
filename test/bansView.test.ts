@@ -55,6 +55,15 @@ const stubs = {
     </div>`,
   },
   RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
+  // The search box, as a plain input. The real one debounces, which is its own
+  // test; here the typed value should reach the view at once.
+  FilterBar: {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: `<input class="filter" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)" />`,
+  },
+  // Has its own tests of what it bans; here only that the page opens it.
+  BanAccountDialog: { props: ['open'], template: '<div v-if="open" class="ban-dialog" />' },
   CopyValue: { props: ['value', 'display'], template: '<span class="copy">{{ display || value }}</span>' },
   // Renders the cell slots the view supplies, because both reversal buttons
   // live in one -- a stub that dropped them would silently make the controls
@@ -121,6 +130,40 @@ beforeEach(() => {
 })
 
 describe('BansView', () => {
+  it('narrows the banned list to what the search matches, by name or by reason', async () => {
+    const other = { ...banned, user_id: 'user_def', display_name: 'Quinn', reason: 'spam links' }
+    const wrapper = await mounted([banned, other], [])
+    expect(wrapper.findAll('.row')).toHaveLength(2)
+
+    await wrapper.find('.filter').setValue('quinn')
+    expect(wrapper.findAll('.row')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Quinn')
+
+    await wrapper.find('.filter').setValue('address')
+    expect(wrapper.findAll('.row')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Pip the Plain')
+    wrapper.unmount()
+  })
+
+  it('clears the search when switching lists, so a list is never filtered by words meant for the other', async () => {
+    const wrapper = await mounted([banned], [list])
+    await wrapper.find('.filter').setValue('pip')
+    await choose(wrapper, 'lists')
+
+    expect((wrapper.find('.filter').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.findAll('.row')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('opens the dialog that bans in the app and Clerk together', async () => {
+    const wrapper = await mounted([], [])
+    expect(wrapper.find('.ban-dialog').exists()).toBe(false)
+
+    await wrapper.find('.ban-open').trigger('click')
+    expect(wrapper.find('.ban-dialog').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('does not claim either list is empty while it is still loading', async () => {
     // The rule TablePager follows: not knowing yet and knowing there is nothing
     // are different answers, and only one is worth reporting.
@@ -193,7 +236,7 @@ describe('BansView', () => {
     // wrong one gets lifted. Same reasoning as ConfirmDialog's own.
     const wrapper = await mounted([banned], [list])
 
-    await wrapper.find('.u-btn').trigger('click')
+    await wrapper.find('.row .u-btn').trigger('click')
     expect(wrapper.find('.dialog').text()).toContain('Pip the Plain')
     expect(wrapper.find('.dialog__label').text()).toBe('Lift ban')
     wrapper.unmount()
@@ -217,7 +260,7 @@ describe('BansView', () => {
     const wrapper = await mounted([banned], [list])
     await choose(wrapper, 'lists')
 
-    await wrapper.find('.u-btn').trigger('click')
+    await wrapper.find('.row .u-btn').trigger('click')
     expect(wrapper.find('.dialog').text()).toContain('The Smiths')
     expect(wrapper.find('.dialog__label').text()).toBe('Restore')
     wrapper.unmount()
@@ -226,7 +269,7 @@ describe('BansView', () => {
   it('lifts the ban on the account whose row was pressed, and nothing else', async () => {
     const wrapper = await mounted([banned], [list])
 
-    await wrapper.find('.u-btn').trigger('click')
+    await wrapper.find('.row .u-btn').trigger('click')
     await wrapper.find('.dialog__go').trigger('click')
     await flush()
 
@@ -239,7 +282,7 @@ describe('BansView', () => {
     const wrapper = await mounted([banned], [list])
     await choose(wrapper, 'lists')
 
-    await wrapper.find('.u-btn').trigger('click')
+    await wrapper.find('.row .u-btn').trigger('click')
     await wrapper.find('.dialog__go').trigger('click')
     await flush()
 
@@ -256,7 +299,7 @@ describe('BansView', () => {
     fetchBannedUsers.mockClear()
     fetchDeletedLists.mockClear()
 
-    await wrapper.find('.u-btn').trigger('click')
+    await wrapper.find('.row .u-btn').trigger('click')
     await wrapper.find('.dialog__go').trigger('click')
     await flush()
 
@@ -291,13 +334,13 @@ describe('BansView', () => {
     unbanUser.mockRejectedValueOnce(new Error('admin_unban_user: boom'))
     const wrapper = await mounted([banned], [list])
 
-    await wrapper.find('.u-btn').trigger('click')
+    await wrapper.find('.row .u-btn').trigger('click')
     await wrapper.find('.dialog__go').trigger('click')
     await flush()
     expect(wrapper.find('.dialog__error').text()).toContain('boom')
 
     await wrapper.find('.dialog__no').trigger('click')
-    await wrapper.find('.u-btn').trigger('click')
+    await wrapper.find('.row .u-btn').trigger('click')
 
     expect(wrapper.find('.dialog__error').text()).toBe('')
     wrapper.unmount()
@@ -306,7 +349,7 @@ describe('BansView', () => {
   it('closes the dialog once the reversal goes through', async () => {
     const wrapper = await mounted([banned], [list])
 
-    await wrapper.find('.u-btn').trigger('click')
+    await wrapper.find('.row .u-btn').trigger('click')
     expect(wrapper.find('.dialog').exists()).toBe(true)
 
     await wrapper.find('.dialog__go').trigger('click')

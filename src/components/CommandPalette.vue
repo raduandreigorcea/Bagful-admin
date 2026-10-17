@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from './AppIcon.vue'
+import { listLabel } from '../lib/listIcon'
 import { fetchUsers } from '../lib/data/users'
 import { fetchLists } from '../lib/data/lists'
 import { fetchContributedProducts } from '../lib/data/contributed'
@@ -98,7 +99,7 @@ async function run(term: string) {
       page.rows.map((row) => ({
         id: `h-${row.id}`,
         group: 'Lists' as const,
-        title: `${row.emoji ? `${row.emoji} ` : ''}${row.name}`,
+        title: listLabel(row.emoji, row.name),
         subtitle: `${row.members} member${row.members === 1 ? '' : 's'} · ${row.invite_code}`,
         to: `/lists/${row.id}`,
       })),

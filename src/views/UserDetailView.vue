@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import ListIcon from '../components/ListIcon.vue'
 import UserChip from '../components/UserChip.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -249,7 +250,7 @@ const membershipNote = computed(() => {
             <ul v-else class="hh">
               <li v-for="hh in memberships" :key="hh.id" class="hh__row">
                 <RouterLink :to="`/lists/${hh.id}`" class="hh__link">
-                  <span class="hh__emoji" aria-hidden="true">{{ hh.emoji || '🏠' }}</span>
+                  <ListIcon :value="hh.emoji" />
                   <span class="hh__name u-truncate">{{ hh.name }}</span>
                   <!-- The Bans section's own glyph, so a withdrawn list
                        carries the mark of the page that can put it back. It
@@ -595,10 +596,6 @@ const membershipNote = computed(() => {
 .hh__link:hover .hh__name {
   color: var(--color-primary);
   text-decoration: underline;
-}
-
-.hh__emoji {
-  flex: none;
 }
 
 .hh__withdrawn {

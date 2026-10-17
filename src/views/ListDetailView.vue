@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import UserChip from '../components/UserChip.vue'
+import { listLabel } from '../lib/listIcon'
 import PageHeader from '../components/PageHeader.vue'
 import PanelCard from '../components/PanelCard.vue'
 import StatTile from '../components/StatTile.vue'
@@ -134,7 +135,7 @@ const openCheckout = ref<ListDetail['recent_checkouts'][number] | null>(null)
 
     <template v-else>
       <PageHeader
-        :title="`${list.emoji ? `${list.emoji} ` : ''}${list.name}`"
+        :title="listLabel(list.emoji, list.name)"
         :fetched-at="detail.fetchedAt.value"
         :busy="detail.fetching.value"
         @refresh="detail.refetch"
