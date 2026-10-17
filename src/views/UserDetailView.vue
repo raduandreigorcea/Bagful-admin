@@ -16,9 +16,11 @@ import CopyValue from '../components/CopyValue.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useQuery, describeError } from '../lib/useQuery'
 import { crumbOf, useLeafCrumb } from '../lib/breadcrumb'
-import { banUser, fetchUserDetail, unbanUser } from '../lib/data/users'
+import { fetchUserDetail } from '../lib/data/users'
+import { banEverywhere, banState, liftEverywhere } from '../lib/banAccount'
 import ClerkAccountActions from '../components/ClerkAccountActions.vue'
-import { fetchClerkUser, methodsLabel, serviceProblem } from '../lib/data/services'
+import MethodBadges from '../components/MethodBadges.vue'
+import { fetchClerkUser, serviceProblem } from '../lib/data/services'
 import { formatCount, formatDateTime, formatRelative, humanizeKind } from '../lib/format'
 
 const route = useRoute()
@@ -50,6 +52,9 @@ const profile = computed(() => detail.data.value?.profile ?? null)
 // ownership is a membership row, so removing them would strip a list of
 // its admin.
 const banned = computed(() => Boolean(profile.value?.banned_at))
+// Banned in either place: the header says so, and the button lifts both.
+const anyBanned = computed(() => banned.value || Boolean(clerkUser.value?.banned))
+const banStatus = computed(() => banState(banned.value, Boolean(clerkUser.value?.banned)))
 const ban = computed(() => detail.data.value?.ban ?? null)
 const confirmingBan = ref(false)
 const banReason = ref('')
@@ -61,11 +66,9 @@ async function confirmBan() {
   banBusy.value = true
   banError.value = ''
   try {
-    if (banned.value) {
-      await unbanUser(userId.value, new AbortController().signal)
-    } else {
-      await banUser(userId.value, banReason.value.trim(), new AbortController().signal)
-    }
+    // One ban, both doors: Bagful and Clerk (lib/banAccount).
+    if (anyBanned.value) await liftEverywhere(userId.value, new AbortController().signal)
+    else await banEverywhere(userId.value, banReason.value, new AbortController().signal)
     confirmingBan.value = false
     banReason.value = ''
     await detail.refetch()
@@ -134,17 +137,17 @@ const membershipNote = computed(() => {
       >
         <template #tools>
           <StatusPill v-if="detail.data.value?.is_admin" tone="accent" label="Dashboard admin" />
-          <StatusPill v-if="banned" tone="bad" label="Suspended" />
+          <StatusPill v-if="banStatus" :tone="banStatus.tone" :label="banStatus.label" :title="banStatus.title" />
           <!-- Danger only when it is one. Suspending refuses somebody the app;
                lifting gives it back, and dressing the two the same asks a
                reader to hesitate over the wrong one. -->
           <button
             type="button"
             class="u-btn"
-            :class="{ 'u-btn--danger': !banned }"
+            :class="{ 'u-btn--danger': !anyBanned }"
             @click="confirmingBan = true"
           >
-            {{ banned ? 'Lift suspension' : 'Suspend' }}
+            {{ anyBanned ? 'Lift ban' : 'Ban' }}
           </button>
         </template>
       </PageHeader>
@@ -331,7 +334,7 @@ const membershipNote = computed(() => {
           </div>
           <div>
             <dt>Signs in with</dt>
-            <dd>{{ methodsLabel(clerkUser.methods) }}</dd>
+            <dd><MethodBadges :methods="clerkUser.methods" /></dd>
           </div>
           <div>
             <dt>Last sign-in</dt>
@@ -349,8 +352,7 @@ const membershipNote = computed(() => {
             <dt>Two-factor</dt>
             <dd>
               {{ clerkUser.twoFactor ? 'On' : 'Off' }}
-              <StatusPill v-if="clerkUser.banned" tone="bad" label="Banned in Clerk" />
-              <StatusPill v-else-if="clerkUser.locked" tone="warn" label="Locked in Clerk" />
+              <StatusPill v-if="clerkUser.locked" tone="warn" label="Locked in Clerk" />
             </dd>
           </div>
         </dl>
@@ -392,13 +394,13 @@ const membershipNote = computed(() => {
 
     <ConfirmDialog
       :open="confirmingBan"
-      :title="banned
-        ? `Lift the suspension on ${profile?.display_name ?? 'this account'}?`
-        : `Suspend ${profile?.display_name ?? 'this account'}?`"
-      :message="banned
-        ? 'They can use Bagful again. Their memberships were never removed, so they return to the lists they were already in.'
-        : 'Bagful refuses them at sign-in. Nothing is deleted and their memberships are left alone, so lifting this puts them straight back.'"
-      :confirm-label="banned ? 'Lift suspension' : 'Suspend'"
+      :title="anyBanned
+        ? `Lift the ban on ${profile?.display_name ?? 'this account'}?`
+        : `Ban ${profile?.display_name ?? 'this account'}?`"
+      :message="anyBanned
+        ? 'Lifted in Bagful and in Clerk. Their memberships were never removed, so they return to the lists they were already in.'
+        : 'Refused by Bagful and by Clerk. Nothing is deleted and their memberships are left alone, so lifting this puts them straight back.'"
+      :confirm-label="anyBanned ? 'Lift ban' : 'Ban'"
       tone="danger"
       :busy="banBusy"
       :error="banError"
@@ -408,7 +410,7 @@ const membershipNote = computed(() => {
       <!-- The reason is the whole audit value of a suspension: without it the
            security_events row records that something happened and not why. -->
       <input
-        v-if="!banned"
+        v-if="!anyBanned"
         v-model="banReason"
         class="reason"
         type="text"
@@ -419,6 +421,13 @@ const membershipNote = computed(() => {
 </template>
 
 <style scoped>
+/* A long address or a row of sign-in methods wraps inside its cell instead of running
+   into the column beside it. */
+.signin dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .signin__actions {
   margin-top: var(--space-4);
   padding-top: var(--space-3);

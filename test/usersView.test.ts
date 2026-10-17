@@ -26,8 +26,8 @@ vi.mock('../src/lib/data/services', async (importOriginal) => ({
 const UsersView = (await import('../src/views/UsersView.vue')).default as unknown as Component
 
 const stubs = {
-  PageHeader: true,
-  PanelCard: { props: ['note'], template: '<section><p class="note">{{ note }}</p><slot /></section>' },
+  PageHeader: { props: ['description'], template: '<p class="note">{{ description }}</p>' },
+  PanelCard: { template: '<section><slot /></section>' },
   FilterBar: true,
   TablePager: true,
   UserChip: { props: ['name'], template: '<span>{{ name }}</span>' },
@@ -92,8 +92,8 @@ describe('UsersView notifications', () => {
     expect(fetchPushSubscribers.mock.calls[0]![0]).toEqual(['user_a', 'user_b', 'user_c'])
     const pushes = wrapper.findAll('.push').map((cell) => cell.text())
     expect(pushes).toEqual(['On', 'Off', 'No device'])
-    expect(wrapper.findAll('.devices')[0]!.text()).toBe('Android · Pixel 8 ×2')
-    expect(wrapper.findAll('.devices')[2]!.text()).toBe('')
+    expect(wrapper.findAll('.devices')[0]!.text()).toBe('Android · Pixel 8')
+    expect(wrapper.findAll('.devices')[2]!.text()).toBe('–')
     wrapper.unmount()
   })
 
@@ -114,7 +114,8 @@ describe('UsersView notifications', () => {
     fetchPushSubscribers.mockReturnValue(new Promise(() => {}))
     const wrapper = await mounted()
 
-    expect(wrapper.findAll('.push').map((cell) => cell.text())).toEqual(['On', '…', '…'])
+    expect(wrapper.findAll('.push').map((cell) => cell.text())).toEqual(['On', '', ''])
+    expect(wrapper.findAll('.push .u-skeleton')).toHaveLength(2)
     wrapper.unmount()
   })
 

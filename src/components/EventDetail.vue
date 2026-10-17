@@ -12,6 +12,8 @@ import UserId from './UserId.vue'
 
 const props = defineProps({
   detail: { type: null, default: null },
+  // Keys the row already shows elsewhere, such as `actor` beside an Account column.
+  omit: { type: Array as () => string[], default: () => [] },
 })
 
 const CLERK_ID = /^user_[A-Za-z0-9]{10,64}$/
@@ -19,7 +21,9 @@ const CLERK_ID = /^user_[A-Za-z0-9]{10,64}$/
 const entries = computed(() => {
   const detail = props.detail
   if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null
-  return Object.entries(detail as Record<string, unknown>).map(([key, value]) => ({
+  return Object.entries(detail as Record<string, unknown>)
+    .filter(([key]) => !props.omit.includes(key))
+    .map(([key, value]) => ({
     key,
     user: typeof value === 'string' && CLERK_ID.test(value) ? value : null,
     text: typeof value === 'string' ? value : JSON.stringify(value),

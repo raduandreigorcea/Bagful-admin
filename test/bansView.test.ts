@@ -16,10 +16,12 @@ import type { Component } from 'vue'
 const fetchDeletedLists = vi.fn()
 const restoreList = vi.fn().mockResolvedValue(undefined)
 const fetchBannedUsers = vi.fn()
-const unbanUser = vi.fn().mockResolvedValue(undefined)
+const fetchClerkBanned = vi.fn().mockResolvedValue([])
+const unbanClerkUser = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('../src/lib/data/lists', () => ({ fetchDeletedLists, restoreList }))
-vi.mock('../src/lib/data/users', () => ({ fetchBannedUsers, unbanUser }))
+vi.mock('../src/lib/data/users', () => ({ fetchBannedUsers }))
+vi.mock('../src/lib/data/services', () => ({ fetchClerkBanned, unbanClerkUser }))
 
 const BansView = (await import('../src/views/BansView.vue')).default as unknown as Component
 
@@ -124,7 +126,9 @@ beforeEach(() => {
   // just checking one happened -- and then it fails somewhere unrelated to the
   // change that added the assertion.
   restoreList.mockClear()
-  unbanUser.mockClear()
+  unbanClerkUser.mockClear()
+  fetchClerkBanned.mockReset()
+  fetchClerkBanned.mockResolvedValue([])
   fetchBannedUsers.mockClear()
   fetchDeletedLists.mockClear()
 })
@@ -242,6 +246,36 @@ describe('BansView', () => {
     wrapper.unmount()
   })
 
+  it('lists a Clerk-only ban beside the app bans, and lifts both doors whichever one the ban was held in', async () => {
+    const clerkOnly = { id: 'user_clk', name: 'Clerk Only', email: 'c@x.io', imageUrl: null, banned: true }
+    fetchClerkBanned.mockResolvedValue([clerkOnly, { ...clerkOnly, id: 'user_abc', name: 'Pip the Plain' }])
+    const wrapper = await mounted([banned], [])
+
+    expect(wrapper.findAll('.row')).toHaveLength(2)
+    expect(wrapper.text()).toContain('Clerk Only')
+
+    // The ban held in both places is lifted in both, with one press.
+    await wrapper.findAll('.row')[0]!.find('.u-btn').trigger('click')
+    await wrapper.find('.dialog__go').trigger('click')
+    await flush()
+    expect(unbanClerkUser).toHaveBeenCalledWith('user_abc', expect.anything())
+
+    // One ban means one lift, whichever door the ban was found in: the server closes both.
+    unbanClerkUser.mockClear()
+    await wrapper.findAll('.row')[1]!.find('.u-btn').trigger('click')
+    await wrapper.find('.dialog__go').trigger('click')
+    await flush()
+    expect(unbanClerkUser).toHaveBeenCalledWith('user_clk', expect.anything())
+    wrapper.unmount()
+  })
+
+  it('still shows the app bans when Clerk cannot be asked', async () => {
+    fetchClerkBanned.mockRejectedValue(new Error('owners only'))
+    const wrapper = await mounted([banned], [])
+    expect(wrapper.findAll('.row')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
   it('makes the withdrawn list reachable from the row offering to restore it', async () => {
     // A restore is decided by looking at what is inside, and this row is the
     // only place a withdrawn list is listed. The link used to land on
@@ -273,7 +307,7 @@ describe('BansView', () => {
     await wrapper.find('.dialog__go').trigger('click')
     await flush()
 
-    expect(unbanUser).toHaveBeenCalledWith('user_abc', expect.anything())
+    expect(unbanClerkUser).toHaveBeenCalledWith('user_abc', expect.anything())
     expect(restoreList).not.toHaveBeenCalled()
     wrapper.unmount()
   })
@@ -287,7 +321,7 @@ describe('BansView', () => {
     await flush()
 
     expect(restoreList).toHaveBeenCalledWith('h-1', expect.anything())
-    expect(unbanUser).not.toHaveBeenCalled()
+    expect(unbanClerkUser).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
@@ -331,7 +365,7 @@ describe('BansView', () => {
   it('does not carry a failed reversal into the next dialog', async () => {
     // Cancel after a failure and press a different row: the fresh dialog must
     // ask its own question, not report the previous row's error.
-    unbanUser.mockRejectedValueOnce(new Error('admin_unban_user: boom'))
+    unbanClerkUser.mockRejectedValueOnce(new Error('admin_unban_user: boom'))
     const wrapper = await mounted([banned], [list])
 
     await wrapper.find('.row .u-btn').trigger('click')

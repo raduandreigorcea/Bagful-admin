@@ -626,7 +626,7 @@ const allClear = computed(() =>
           <span v-else class="u-muted">--</span>
         </template>
         <template #cell-detail="{ row }">
-          <EventDetail :detail="row.detail" />
+          <EventDetail :detail="row.detail" :omit="row.actor ? ['actor'] : []" />
         </template>
         <template #cell-created_at="{ row }">
           <span :title="formatDateTime(String(row.created_at))">

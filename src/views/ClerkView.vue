@@ -6,24 +6,32 @@ import DataTable from '../components/DataTable.vue'
 import StateBlock from '../components/StateBlock.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ClerkAccountActions from '../components/ClerkAccountActions.vue'
+import { banState } from '../lib/banAccount'
+import { fetchBannedUsers } from '../lib/data/users'
 import StatusPill from '../components/StatusPill.vue'
 import UserChip from '../components/UserChip.vue'
 import { useQuery, describeError } from '../lib/useQuery'
-import { DASHBOARDS, fetchClerkSummary, searchClerkUsers, methodsLabel, serviceProblem, type ClerkUser } from '../lib/data/services'
+import MethodBadges from '../components/MethodBadges.vue'
+import { DASHBOARDS, fetchClerkSummary, searchClerkUsers, serviceProblem, type ClerkUser } from '../lib/data/services'
 import type { Column } from '../lib/uiTypes'
 import { formatDateTime, formatRelative } from '../lib/format'
 
 // Clerk: the accounts as the sign-in service knows them.
 //
-// What an admin can do to an account lives in ClerkAccountActions. Banning here is
-// a Clerk ban (refused at sign-in), distinct from the Bans page, which only the app
-// enforces; the dialog says so before it runs.
+// What an admin can do to an account's sessions lives in ClerkAccountActions. There
+// is no Ban here: the one ban (Bagful and Clerk together) is on the person's page and
+// in Bans. This page only shows where an account stands.
 //
 // There is one Clerk instance for both app projects, so the accounts here are
 // the same on either. A row links to the person's page on the project being
 // read, which says so when that project has never seen them.
 
 const summary = useQuery((signal) => fetchClerkSummary(signal))
+// Bagful's side of the one ban, so a row says Banned only when both doors are shut
+// and calls a half-ban what it is. Failing to read it just leaves the rows as Clerk sees them.
+const appBans = useQuery((signal) => fetchBannedUsers(signal))
+const appBannedIds = computed(() => new Set((appBans.data.value ?? []).map((row) => row.user_id)))
+const banOf = (user: ClerkUser) => banState(appBannedIds.value.has(user.id), user.banned)
 
 const problem = computed(() => serviceProblem(summary.error.value))
 const loadError = computed(() => {
@@ -43,17 +51,18 @@ const search = useQuery((signal) => searchClerkUsers(query.value.trim(), signal)
 const shown = computed(() => (searching.value ? (search.data.value ?? []) : (summary.data.value?.recent ?? [])))
 
 function refreshAll() {
+  void appBans.refetch()
   void summary.refetch()
   if (searching.value) void search.refetch()
 }
 
 const columns: Column<ClerkUser>[] = [
   { key: 'name', label: 'Account', width: '20%' },
-  { key: 'email', label: 'Email', width: '18%', hideBelow: 1100 },
+  { key: 'email', label: 'Email', width: '22%', hideBelow: 1100 },
   { key: 'methods', label: 'Signs in with', width: '12%' },
   { key: 'lastSignInAt', label: 'Last sign-in', width: '11%' },
   { key: 'createdAt', label: 'Created', width: '9%', hideBelow: 1400 },
-  { key: 'actions', label: '', width: '30%' },
+  { key: 'actions', label: '', width: '26%' },
 ]
 
 const asUser = (row: unknown) => row as ClerkUser
@@ -91,14 +100,14 @@ const asUser = (row: unknown) => row as ClerkUser
           <template #cell-name="{ row }">
             <span class="clerk__who">
               <UserChip :id="asUser(row).id" :name="asUser(row).name" :src="asUser(row).imageUrl" />
-              <StatusPill v-if="asUser(row).banned" tone="bad" label="Banned in Clerk" />
+              <StatusPill v-if="banOf(asUser(row))" :tone="banOf(asUser(row))!.tone" :label="banOf(asUser(row))!.label" :title="banOf(asUser(row))!.title" />
               <StatusPill v-else-if="asUser(row).locked" tone="warn" label="Locked" />
             </span>
           </template>
           <template #cell-email="{ row }">
-            <span class="u-truncate">{{ asUser(row).email ?? '' }}</span>
+            <span class="u-truncate clerk__email">{{ asUser(row).email ?? '' }}</span>
           </template>
-          <template #cell-methods="{ row }">{{ methodsLabel(asUser(row).methods) }}</template>
+          <template #cell-methods="{ row }"><MethodBadges :methods="asUser(row).methods" /></template>
           <template #cell-lastSignInAt="{ row }">
             <time v-if="asUser(row).lastSignInAt" :title="formatDateTime(asUser(row).lastSignInAt)">
               {{ formatRelative(asUser(row).lastSignInAt) }}
@@ -122,6 +131,11 @@ const asUser = (row: unknown) => row as ClerkUser
 </template>
 
 <style scoped>
+/* A span is inline and cannot be clipped: without this a long address ran under the next column. */
+.clerk__email {
+  display: block;
+}
+
 /* Pushed to the end of the row, so the buttons line up with the right edge of
    the card whatever the column widths do. */
 .clerk__actions {

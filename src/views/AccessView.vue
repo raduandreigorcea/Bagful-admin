@@ -38,11 +38,7 @@ const revokeBusy = ref(false)
 const revokeError = ref('')
 
 const columns: Column<AdminRow>[] = [
-  { key: 'display_name', label: 'Account', width: '28%' },
-  { key: 'user_id', label: 'Clerk id', width: '22%' },
-  { key: 'note', label: 'Note', width: '20%' },
-  { key: 'granted_by_name', label: 'Granted by', width: '15%', hideBelow: 1100 },
-  { key: 'granted_at', label: 'Granted', width: '15%' },
+{ key: 'display_name', label: 'Account', width: '22%' },  { key: 'user_id', label: 'Clerk id', width: '16%' },  { key: 'note', label: 'Note', width: '14%' },  { key: 'granted_by_name', label: 'Granted by', width: '16%', hideBelow: 1100 },  { key: 'granted_at', label: 'Granted', width: '32%' },
 ]
 
 const rows = computed(() => admins.data.value ?? [])
@@ -140,7 +136,7 @@ async function confirmRevoke() {
 
         <template #cell-granted_at="{ row }">
           <div class="granted">
-            <span :title="formatDateTime(String(row.granted_at))">
+            <span class="granted__when" :title="formatDateTime(String(row.granted_at))">
               {{ formatRelative(String(row.granted_at)) }}
             </span>
             <button
@@ -237,7 +233,12 @@ async function confirmRevoke() {
   gap: var(--space-2);
 }
 
+.granted__when {
+  white-space: nowrap;
+}
+
 .granted__self {
+  white-space: nowrap;
   font-size: var(--text-2xs);
   color: var(--text-disabled);
   cursor: help;

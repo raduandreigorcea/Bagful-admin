@@ -2,29 +2,26 @@
 import { computed, ref, type PropType } from 'vue'
 import { useUser } from '@clerk/vue'
 import ConfirmDialog from './ConfirmDialog.vue'
-import {
-  banClerkUser,
-  impersonateClerkUser,
-  revokeClerkSessions,
-  unbanClerkUser,
-  type ClerkUser,
-} from '../lib/data/services'
+import { impersonateClerkUser, revokeClerkSessions, type ClerkUser } from '../lib/data/services'
 
-// What an admin can do to an account, wherever an account is shown.
+// What an admin can do to an account's SESSIONS, wherever an account is shown.
 //
 // The same buttons on the Clerk page's rows and on a person's own page, so
 // there is one place that knows what each one asks, what it says before it runs
-// and what it says after. The destructive ones (ban, sign out everywhere) and the
-// risky one (impersonate) confirm first and name the person.
+// and what it says after. Signing out everywhere and impersonating confirm first
+// and name the person.
 //
-// On your OWN account two are left out: ban (it locks you out) and impersonate
-// (it would sign you in as yourself). admin-services refuses both as well, but a
-// button that can only fail is a worse answer than no button. Signing yourself out
-// everywhere is allowed.
+// Banning is NOT here. There is one ban, and it belongs on the person's own page
+// (UserDetailView), where it closes Bagful and Clerk together. A second Ban button
+// on the Clerk list was the way to end up with half a ban.
+//
+// On your OWN account impersonate is left out (it would sign you in as yourself).
+// admin-services refuses it as well, but a button that can only fail is a worse
+// answer than no button. Signing yourself out everywhere is allowed.
 //
 // A test notification is not here: it is a push check, so it lives on the OneSignal page.
 
-type Kind = 'ban' | 'unban' | 'sessions' | 'impersonate'
+type Kind = 'sessions' | 'impersonate'
 
 const props = defineProps({
   user: { type: Object as PropType<ClerkUser>, required: true },
@@ -44,14 +41,6 @@ const notice = ref<{ title: string; message: string; link?: string } | null>(nul
 const copied = ref(false)
 
 const COPY: Record<Kind, { title: string; message: string; confirm: string; tone: 'primary' | 'danger' }> = {
-  ban: {
-    title: 'Ban in Clerk?',
-    message:
-      'Clerk will refuse this account at sign-in, and every session it has stops working. This is separate from the ban on the Bans page, which only the app enforces.',
-    confirm: 'Ban',
-    tone: 'danger',
-  },
-  unban: { title: 'Lift the Clerk ban?', message: 'They can sign in again straight away.', confirm: 'Lift ban', tone: 'primary' },
   sessions: {
     title: 'Sign out everywhere?',
     message: 'Ends every active session on every device. They can sign in again whenever they like.',
@@ -82,9 +71,7 @@ async function run() {
   error.value = ''
   const signal = new AbortController().signal
   try {
-    if (kind === 'ban') await banClerkUser(props.user.id, signal)
-    else if (kind === 'unban') await unbanClerkUser(props.user.id, signal)
-    else if (kind === 'sessions') {
+    if (kind === 'sessions') {
       const { revoked } = await revokeClerkSessions(props.user.id, signal)
       notice.value = {
         title: 'Signed out',
@@ -126,17 +113,6 @@ function closeNotice() {
   <span class="actions">
     <button v-if="!isSelf" type="button" class="u-btn" @click="pending = 'impersonate'">Impersonate</button>
     <button type="button" class="u-btn" @click="pending = 'sessions'">Sign out</button>
-    <!-- Last: the one that locks an account out. Red only to ban; lifting a ban
-         is putting things back, so it stays neutral. -->
-    <button
-      v-if="!isSelf"
-      type="button"
-      class="u-btn"
-      :class="{ 'u-btn--danger': !user.banned }"
-      @click="pending = user.banned ? 'unban' : 'ban'"
-    >
-      {{ user.banned ? 'Lift ban' : 'Ban' }}
-    </button>
   </span>
 
   <ConfirmDialog

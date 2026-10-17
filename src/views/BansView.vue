@@ -17,7 +17,10 @@ import {
   restoreList,
   type DeletedListRow,
 } from '../lib/data/lists'
-import { fetchBannedUsers, unbanUser, type BannedUserRow } from '../lib/data/users'
+import { fetchBannedUsers } from '../lib/data/users'
+import { fetchClerkBanned } from '../lib/data/services'
+import { liftEverywhere } from '../lib/banAccount'
+import { mergeBans, type BanRow } from '../lib/bans'
 import type { Column } from '../lib/uiTypes'
 import { formatCount, formatDateTime, formatRelative } from '../lib/format'
 
@@ -67,13 +70,25 @@ function setScope(next: string) {
 // a list is hidden and runs when one is shown, and it keeps whatever it already
 // fetched, so coming back shows the old rows while they are re-read rather than
 // an empty table.
-const banned = useQuery((signal) => fetchBannedUsers(signal), {
+const appBans = useQuery((signal) => fetchBannedUsers(signal), {
   enabled: () => onPeople.value,
 })
+// Clerk's side of the same bans. Allowed to fail without taking the page down: it
+// is owners only, and a project with no Clerk key answers not_configured. Then the
+// table is the app's bans alone, as it was before this was read.
+const clerkBans = useQuery((signal) => fetchClerkBanned(signal), {
+  enabled: () => onPeople.value,
+})
+const banned = {
+  data: computed(() => (appBans.data.value === null ? null : mergeBans(appBans.data.value, clerkBans.data.value ?? []))),
+  loading: appBans.loading,
+  error: appBans.error,
+  refetch: () => Promise.all([appBans.refetch(), clerkBans.refetch()]),
+}
 const deleted = useQuery((signal) => fetchDeletedLists(signal), {
   enabled: () => !onPeople.value,
 })
-const page = useQueryGroup([banned, deleted])
+const page = useQueryGroup([appBans, clerkBans, deleted])
 
 // Searching is done here, over what is already loaded: both RPCs return every
 // row, so there is nothing for a server round trip to narrow.
@@ -123,12 +138,12 @@ const segments = [
   },
 ]
 
-const bannedColumns: Column<BannedUserRow>[] = [
-  { key: 'display_name', label: 'Account', width: '26%' },
+const bannedColumns: Column<BanRow>[] = [
+  { key: 'display_name', label: 'Account', width: '28%' },
   { key: 'banned_at', label: 'Banned', sortable: false, width: '14%' },
-  { key: 'reason', label: 'Reason', sortable: false, width: '30%', title: 'From the audit trail' },
-  { key: 'lists', label: 'Lists', numeric: true, width: '12%', title: 'Still a member of' },
-  { key: 'actions', label: '', align: 'right', width: '18%' },
+  { key: 'reason', label: 'Reason', sortable: false, width: '32%', title: 'From the audit trail' },
+  { key: 'lists', label: 'Lists', numeric: true, width: '10%', title: 'Still a member of' },
+  { key: 'actions', label: '', align: 'right', width: '16%' },
 ]
 
 const deletedColumns: Column<DeletedListRow>[] = [
@@ -146,7 +161,7 @@ const deletedColumns: Column<DeletedListRow>[] = [
 // held as a tagged value rather than as two refs that could both be set.
 
 type Pending =
-  | { kind: 'user'; row: BannedUserRow }
+  | { kind: 'user'; row: BanRow }
   | { kind: 'list'; row: DeletedListRow }
 
 const pending = ref<Pending | null>(null)
@@ -184,7 +199,7 @@ const dialogMessage = computed(() => {
   const target = pending.value
   if (!target) return ''
   return target.kind === 'user'
-    ? 'They can open Bagful again straight away. Their lists and everything in them are untouched — a ban never removed them.'
+    ? 'Both refusals come off, in Bagful and in Clerk, and they can sign in and open the app again straight away. Their lists and everything in them are untouched — a ban never removed them.'
     : 'Its members get it back, along with every item and purchase inside it.'
 })
 
@@ -197,9 +212,15 @@ async function confirmReversal() {
   actionError.value = ''
   try {
     if (target.kind === 'user') {
-      await unbanUser(target.row.user_id, new AbortController().signal)
-      pending.value = null
-      await banned.refetch()
+      // Both doors, so a ban that was only ever half applied is lifted whole. The
+      // app first: it is the one this page owns.
+      try {
+        await liftEverywhere(target.row.user_id, new AbortController().signal)
+        pending.value = null
+      } finally {
+        // Even on a failure: one door may already be open, and the table should say so.
+        await banned.refetch()
+      }
     } else {
       await restoreList(target.row.id, new AbortController().signal)
       pending.value = null
@@ -223,28 +244,24 @@ async function confirmReversal() {
       @refresh="page.refresh"
     >
       <template #tools>
-        <button type="button" class="u-btn ban-open" @click="banning = true">Ban account</button>
-      </template>
-    </PageHeader>
-
-    <PanelCard :title="onPeople ? 'Banned accounts' : 'Withdrawn lists'" :note="onPeople
-      ? 'Refused at the door. Their memberships are left alone.'
-      : 'Hidden wholesale, with everything inside them.'" flush>
-      <template #actions>
         <SegmentedControl
           :model-value="scope"
           :segments="segments"
           aria-label="Which bans"
           @update:model-value="setScope"
         />
+        <button type="button" class="u-btn ban-open" @click="banning = true">Ban account</button>
       </template>
+    </PageHeader>
+
+    <PanelCard flush>
 
       <template v-if="onPeople">
         <StateBlock
           v-if="noBans"
           state="empty"
           title="Nobody is banned"
-          message="Use Ban account above, or the Ban button on an account's page. Anyone banned waits here until the ban is lifted."
+          message="Use Ban account above. A ban refuses an account in Bagful and in Clerk, and waits here until it is lifted."
         />
         <div v-if="!noBans" class="u-toolbar">
           <FilterBar v-model="filter" placeholder="Search by name, reason or ID" />
@@ -268,9 +285,10 @@ async function confirmReversal() {
           </template>
 
           <template #cell-banned_at="{ row }">
-            <span :title="formatDateTime(String(row.banned_at))">
+            <span v-if="row.banned_at" :title="formatDateTime(String(row.banned_at))">
               {{ formatRelative(String(row.banned_at)) }}
             </span>
+            <span v-else class="u-muted" title="Clerk does not record when">–</span>
           </template>
 
           <!-- A ban may be given with no reason at all, so an empty cell is an
@@ -296,7 +314,7 @@ async function confirmReversal() {
             </span>
           </template>
 
-          <template #cell-lists="{ row }">{{ formatCount(Number(row.lists)) }}</template>
+          <template #cell-lists="{ row }">{{ row.lists === null ? '–' : formatCount(Number(row.lists)) }}</template>
 
           <template #cell-actions="{ row }">
             <button type="button" class="u-btn" @click="ask({ kind: 'user', row })">

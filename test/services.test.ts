@@ -31,6 +31,7 @@ const {
   methodsLabel,
   deviceLabel,
   deviceSummary,
+  subscriptionCount,
   pushKind,
   pushStates,
   subscriberPill,
@@ -123,14 +124,15 @@ describe('deviceLabel', () => {
 describe('deviceSummary', () => {
   const pixel = { kind: 'Android', enabled: true, model: 'Pixel 7', os: null, appVersion: null }
 
-  it('counts equal devices instead of listing each reinstall', () => {
-    expect(deviceSummary([pixel, pixel, { ...pixel, model: 'moto g(60)s' }])).toBe('Android · Pixel 7 ×2, Android · moto g(60)s')
+  it('names each device once, however many reinstalls sit behind it', () => {
+    expect(deviceSummary([pixel, pixel, { ...pixel, model: 'moto g(60)s' }])).toBe('Android · Pixel 7, Android · moto g(60)s')
+    expect(subscriptionCount([pixel, pixel, { ...pixel, model: 'moto g(60)s' }])).toBe(3)
   })
 
   it('leaves out the unsubscribed ones while anything is subscribed, and shows them when nothing is', () => {
     const dead = { ...pixel, model: 'Old phone', enabled: false }
     expect(deviceSummary([dead, pixel])).toBe('Android · Pixel 7')
-    expect(deviceSummary([dead, dead])).toBe('Android · Old phone ×2')
+    expect(deviceSummary([dead, dead])).toBe('Android · Old phone')
     expect(deviceSummary([])).toBe('')
   })
 })
@@ -197,5 +199,16 @@ describe('methodsLabel', () => {
   it('says how someone signs in, in words', () => {
     expect(methodsLabel(['google', 'email'])).toBe('Google, Email code')
     expect(methodsLabel([])).toBe('Nothing set up')
+  })
+})
+
+describe('recentCount', () => {
+  it('adds up the last N days of an event across its breakdowns', async () => {
+    const { recentCount } = await import('../src/lib/data/services')
+    const activity = { counts: { search_performed: { '': [1, 2, 3, 4] }, other: { a: [9, 9], b: [1, 1] } } } as never
+    expect(recentCount(activity, 'search_performed', 2)).toBe(7)
+    expect(recentCount(activity, 'search_performed', 30)).toBe(10)
+    expect(recentCount(activity, 'other', 1)).toBe(10)
+    expect(recentCount(activity, 'missing', 7)).toBe(0)
   })
 })

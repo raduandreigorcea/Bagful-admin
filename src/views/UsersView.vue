@@ -13,7 +13,7 @@ import UserId from '../components/UserId.vue'
 import { useQuery, describeError } from '../lib/useQuery'
 import { useTableState } from '../lib/useTableState'
 import { fetchUsers, isUserSort } from '../lib/data/users'
-import { cachedSubscriber, deviceSummary, fetchClerkSummary, fetchReplayers, fetchPushSubscribers, serviceProblem, subscriberPill } from '../lib/data/services'
+import { cachedSubscriber, deviceSummary, subscriptionCount, fetchClerkSummary, fetchReplayers, fetchPushSubscribers, serviceProblem, subscriberPill } from '../lib/data/services'
 import type { AdminUserRow } from '../lib/data/types'
 import type { Column } from '../lib/uiTypes'
 import { formatCount, formatDateTime, formatRelative, shortUserId } from '../lib/format'
@@ -48,8 +48,8 @@ const columns: Column<AdminUserRow>[] = [
   // They sum to 100 because fixed layout scales the whole set down when they do
   // not, which once made a column overflow while claiming a share of a set that
   // added up to 105.
-  { key: 'display_name', label: 'Account', sortable: true, width: '24%' },
-  { key: 'user_id', label: 'Clerk id', width: '10%', hideBelow: 1400 },
+  { key: 'display_name', label: 'Account', sortable: true, width: '22%' },
+  { key: 'user_id', label: 'Clerk id', width: '12%', hideBelow: 1400 },
   { key: 'push', label: 'Notifications', width: '14%', title: 'From OneSignal: whether this person has a device subscribed to push.' },
   { key: 'devices', label: 'Devices', width: '16%', hideBelow: 1100 },
   { key: 'telemetry', label: 'Telemetry', width: '12%', hideBelow: 1100, title: 'From PostHog: On when this person recorded a session in the last 30 days (Session replay is on in their Settings). Off can also mean the app has not been opened since.' },
@@ -112,13 +112,13 @@ function activityTone(lastActive: string): 'good' | 'idle' {
   <div class="page">
     <PageHeader
       title="Users"
-      description="Every profile on this database, and whether each person can be sent a notification. First seen and last active are derived rather than recorded: nothing logs a signup or a session."
+      :description="`Every profile on this database, and whether each person can be sent a notification. First seen and last active are derived rather than recorded: nothing logs a signup or a session.${pushNote ? ` ${pushNote}` : ''}`"
       :fetched-at="users.fetchedAt.value"
       :busy="users.fetching.value"
       @refresh="users.refetch"
     />
 
-    <PanelCard title="Accounts" :note="pushNote || 'Open one to see its lists and what it has done.'" flush>
+    <PanelCard flush>
       <div class="u-toolbar">
         <FilterBar
           v-model="query"
@@ -172,22 +172,29 @@ function activityTone(lastActive: string): 'good' | 'idle' {
         </template>
 
         <template #cell-push="{ row }">
+          <!-- Nothing to report (no device) is plain text: a grey pill on every
+               row buried the people who actually have notifications on. -->
+          <span v-if="pillById.get(String(row.user_id))?.tone === 'idle'" class="u-muted" :title="pillById.get(String(row.user_id))!.title">{{ pillById.get(String(row.user_id))!.label }}</span>
           <StatusPill
-            v-if="pillById.get(String(row.user_id))"
+            v-else-if="pillById.get(String(row.user_id))"
             :tone="pillById.get(String(row.user_id))!.tone"
             :label="pillById.get(String(row.user_id))!.label"
             :title="pillById.get(String(row.user_id))!.title"
           />
-          <span v-else class="u-muted" :title="pushNote" :aria-busy="pushState.fetching.value">{{ pushState.fetching.value ? '…' : '–' }}</span>
+          <span v-else-if="pushState.fetching.value" class="u-skeleton users__bar" aria-busy="true" />
+          <span v-else class="u-muted" :title="pushNote">–</span>
         </template>
 
         <template #cell-telemetry="{ row }">
-          <StatusPill v-if="replayById.has(String(row.user_id))" :tone="replayById.get(String(row.user_id)) ? 'good' : 'idle'" :label="replayById.get(String(row.user_id)) ? 'On' : 'Off'" />
-          <span v-else class="u-muted">{{ replayState.fetching.value ? '…' : '–' }}</span>
+          <StatusPill v-if="replayById.get(String(row.user_id))" tone="good" label="On" />
+          <span v-else-if="replayById.has(String(row.user_id))" class="u-muted">Off</span>
+          <span v-else-if="replayState.fetching.value" class="u-skeleton users__bar users__bar--short" aria-busy="true" />
+          <span v-else class="u-muted">–</span>
         </template>
 
         <template #cell-devices="{ row }">
-          <span class="u-truncate">{{ deviceSummary(pushById.get(String(row.user_id))?.devices ?? []) }}</span>
+          <span v-if="pushState.fetching.value && !pushById.has(String(row.user_id))" class="u-skeleton users__bar users__bar--long" aria-busy="true" />
+          <span v-else class="u-truncate users__block" :title="`${subscriptionCount(pushById.get(String(row.user_id))?.devices ?? [])} subscriptions in OneSignal (each reinstall adds one)`">{{ deviceSummary(pushById.get(String(row.user_id))?.devices ?? []) || '–' }}</span>
         </template>
 
         <template #cell-first_seen="{ row }">
@@ -227,5 +234,24 @@ function activityTone(lastActive: string): 'good' | 'idle' {
 
 .last {
   display: inline-flex;
+}
+
+/* A span is inline and cannot be clipped: without this a long device list ran under the next column. */
+.users__block {
+  display: block;
+}
+
+/* The size of the pill or text that replaces it, so nothing jumps when it lands. */
+.users__bar {
+  width: 56px;
+  height: 18px;
+}
+
+.users__bar--short {
+  width: 36px;
+}
+
+.users__bar--long {
+  width: 120px;
 }
 </style>
