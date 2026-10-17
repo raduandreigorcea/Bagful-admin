@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import UserChip from '../components/UserChip.vue'
+import ListIcon from '../components/ListIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
 import PanelCard from '../components/PanelCard.vue'
 import DataTable from '../components/DataTable.vue'
@@ -103,7 +104,7 @@ function activityTone(lastActive: string): 'good' | 'idle' {
       >
         <template #cell-name="{ row }">
           <span class="name">
-            <span class="name__emoji" aria-hidden="true">{{ row.emoji || '🏠' }}</span>
+            <ListIcon :value="row.emoji" />
             <span class="u-truncate">{{ row.name }}</span>
           </span>
         </template>
@@ -155,7 +156,4 @@ function activityTone(lastActive: string): 'good' | 'idle' {
   font-weight: var(--weight-medium);
 }
 
-.name__emoji {
-  flex: none;
-}
 </style>

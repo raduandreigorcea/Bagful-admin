@@ -2,11 +2,14 @@
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import UserChip from '../components/UserChip.vue'
+import ListIcon from '../components/ListIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
 import PanelCard from '../components/PanelCard.vue'
 import DataTable from '../components/DataTable.vue'
 import StateBlock from '../components/StateBlock.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import BanAccountDialog from '../components/BanAccountDialog.vue'
+import FilterBar from '../components/FilterBar.vue'
 import SegmentedControl from '../components/SegmentedControl.vue'
 import { useQuery, useQueryGroup, describeError } from '../lib/useQuery'
 import {
@@ -51,6 +54,8 @@ const onPeople = computed(() => scope.value === 'people')
 // to put any string into this ref.
 function setScope(next: string) {
   scope.value = next === 'lists' ? 'lists' : 'people'
+  // A search for a person means nothing in the list of lists.
+  filter.value = ''
 }
 
 // Only the list on screen is fetched. Both used to run on mount, which was
@@ -70,14 +75,29 @@ const deleted = useQuery((signal) => fetchDeletedLists(signal), {
 })
 const page = useQueryGroup([banned, deleted])
 
-const bannedRows = computed(() => banned.data.value ?? [])
-const deletedRows = computed(() => deleted.data.value ?? [])
+// Searching is done here, over what is already loaded: both RPCs return every
+// row, so there is nothing for a server round trip to narrow.
+const filter = ref('')
+const needle = computed(() => filter.value.trim().toLowerCase())
+const matches = (...fields: (string | null | undefined)[]) =>
+  !needle.value || fields.some((field) => field?.toLowerCase().includes(needle.value))
+
+const bannedRows = computed(() =>
+  (banned.data.value ?? []).filter((row) =>
+    matches(row.display_name, row.reason, row.user_id, row.banned_by_name),
+  ),
+)
+const deletedRows = computed(() =>
+  (deleted.data.value ?? []).filter((row) => matches(row.name)),
+)
+
+const banning = ref(false)
 
 // Not `rows.length === 0`: that is also true before the first response, and an
 // empty list and an unanswered query are different answers. Same rule as
 // TablePager's "Counting…".
-const noBans = computed(() => banned.data.value !== null && bannedRows.value.length === 0)
-const noneDeleted = computed(() => deleted.data.value !== null && deletedRows.value.length === 0)
+const noBans = computed(() => banned.data.value !== null && banned.data.value.length === 0)
+const noneDeleted = computed(() => deleted.data.value !== null && deleted.data.value.length === 0)
 
 const bannedError = computed(() =>
   banned.error.value ? describeError(banned.error.value).detail : '',
@@ -201,7 +221,11 @@ async function confirmReversal() {
       :fetched-at="page.fetchedAt.value"
       :busy="page.busy.value"
       @refresh="page.refresh"
-    />
+    >
+      <template #tools>
+        <button type="button" class="u-btn ban-open" @click="banning = true">Ban account</button>
+      </template>
+    </PageHeader>
 
     <PanelCard :title="onPeople ? 'Banned accounts' : 'Withdrawn lists'" :note="onPeople
       ? 'Refused at the door. Their memberships are left alone.'
@@ -220,16 +244,20 @@ async function confirmReversal() {
           v-if="noBans"
           state="empty"
           title="Nobody is banned"
-          message="Banning an account is done from its own page. Anyone banned waits here until the ban is lifted."
+          message="Use Ban account above, or the Ban button on an account's page. Anyone banned waits here until the ban is lifted."
         />
+        <div v-if="!noBans" class="u-toolbar">
+          <FilterBar v-model="filter" placeholder="Search by name, reason or ID" />
+        </div>
         <DataTable
-          v-else
+          v-if="!noBans"
           :columns="bannedColumns"
           :rows="bannedRows"
           row-key="user_id"
           :loading="banned.loading.value"
           :error="bannedError"
-          empty-title="Nobody is banned"
+          empty-title="No ban matches"
+          empty-message="Try part of a name, or a word from the reason."
         >
           <template #cell-display_name="{ row }">
             <UserChip
@@ -285,20 +313,25 @@ async function confirmReversal() {
           title="Nothing withdrawn"
           message="When an admin deletes a list it waits here until it is restored."
         />
+        <div v-if="!noneDeleted" class="u-toolbar">
+          <FilterBar v-model="filter" placeholder="Search by list name" />
+        </div>
         <DataTable
-          v-else
+          v-if="!noneDeleted"
           :columns="deletedColumns"
           :rows="deletedRows"
           row-key="id"
           :loading="deleted.loading.value"
           :error="deletedError"
-          empty-title="Nothing withdrawn"
+          empty-title="No list matches"
+          empty-message="Try part of the list's name."
         >
           <!-- A link, because a restore is decided by looking at what is inside
                and this row is the only place a withdrawn list is listed. -->
           <template #cell-name="{ row }">
             <RouterLink :to="`/lists/${row.id}`" class="who">
-              <span class="who__name">{{ row.emoji ? `${row.emoji} ` : '' }}{{ row.name }}</span>
+              <ListIcon :value="row.emoji" />
+              <span class="who__name">{{ row.name }}</span>
             </RouterLink>
           </template>
 
@@ -319,6 +352,8 @@ async function confirmReversal() {
         </DataTable>
       </template>
     </PanelCard>
+
+    <BanAccountDialog :open="banning" @close="banning = false" @banned="banned.refetch()" />
 
     <ConfirmDialog
       :open="pending !== null"

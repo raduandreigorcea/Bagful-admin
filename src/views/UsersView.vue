@@ -13,12 +13,12 @@ import UserId from '../components/UserId.vue'
 import { useQuery, describeError } from '../lib/useQuery'
 import { useTableState } from '../lib/useTableState'
 import { fetchUsers, isUserSort } from '../lib/data/users'
-import { fetchClerkSummary } from '../lib/data/services'
+import { cachedSubscriber, deviceSummary, fetchClerkSummary, fetchReplayers, fetchPushSubscribers, serviceProblem, subscriberPill } from '../lib/data/services'
 import type { AdminUserRow } from '../lib/data/types'
 import type { Column } from '../lib/uiTypes'
 import { formatCount, formatDateTime, formatRelative, shortUserId } from '../lib/format'
 
-// Every account, and what each one has actually done.
+// Every account, and whether each one can be sent a notification.
 //
 // Sorting and paging are server-side: the RPC gets the sort and the offset, and
 // the table only reports the click. Sorting 25 of 300 rows in the browser would
@@ -45,24 +45,51 @@ const clerkTotal = useQuery((signal) =>
 )
 
 const columns: Column<AdminUserRow>[] = [
-  // Nine columns, and the widest header is over the narrowest column, so these
-  // were measured rather than guessed: each one is comfortably above what its
-  // header needs at --text-2xs with its sort caret (Lists, the tight one,
-  // needs 10.1%). They sum to 100 because fixed layout scales the whole set
-  // down when they do not, which is how Lists came to overflow by 7px
-  // while claiming 9% of a set that added up to 105.
-  { key: 'display_name', label: 'Account', sortable: true, width: '26%' },
-  { key: 'user_id', label: 'Clerk id', width: '12%', hideBelow: 1400 },
-  { key: 'lists', label: 'Lists', numeric: true, sortable: true, width: '11%' },
-  { key: 'items_added', label: 'Items', numeric: true, sortable: true, width: '7%', title: 'Items ever added to any list' },
-  { key: 'items_open', label: 'Open', numeric: true, width: '6%', hideBelow: 1100, title: 'Unchecked items on a list right now' },
-  { key: 'purchases', label: 'Bought', numeric: true, sortable: true, width: '8%' },
-  { key: 'products_added', label: 'Products', numeric: true, width: '8%', hideBelow: 1400, title: 'Catalog rows this account contributed' },
+  // They sum to 100 because fixed layout scales the whole set down when they do
+  // not, which once made a column overflow while claiming a share of a set that
+  // added up to 105.
+  { key: 'display_name', label: 'Account', sortable: true, width: '24%' },
+  { key: 'user_id', label: 'Clerk id', width: '10%', hideBelow: 1400 },
+  { key: 'push', label: 'Notifications', width: '14%', title: 'From OneSignal: whether this person has a device subscribed to push.' },
+  { key: 'devices', label: 'Devices', width: '16%', hideBelow: 1100 },
+  { key: 'telemetry', label: 'Telemetry', width: '12%', hideBelow: 1100, title: 'From PostHog: On when this person recorded a session in the last 30 days (Session replay is on in their Settings). Off can also mean the app has not been opened since.' },
   { key: 'first_seen', label: 'First seen', sortable: true, width: '10%', hideBelow: 1100 },
-  { key: 'last_active', label: 'Last active', sortable: true, width: '12%' },
+  { key: 'last_active', label: 'Last active', sortable: true, width: '14%' },
 ]
 
 const rows = computed(() => users.data.value?.rows ?? [])
+
+// Notification state for the people on this page, one OneSignal answer each.
+// Asked after the page of users is known, and never allowed to hold it up or
+// break it: where OneSignal is not connected (bagful-dev has no push) or does
+// not answer, the cells simply stay empty.
+const pushState = useQuery((signal) => fetchPushSubscribers(rows.value.map((row) => row.user_id), signal), {
+  watch: [rows],
+  enabled: () => rows.value.length > 0,
+})
+// Same idea for telemetry: asked after the page is known, and silent when PostHog is not connected.
+const replayState = useQuery((signal) => fetchReplayers(rows.value.map((row) => row.user_id), signal), {
+  watch: [rows],
+  enabled: () => rows.value.length > 0,
+})
+const replayById = computed(() => new Map((replayState.data.value ?? []).map((r) => [r.userId, r.replay])))
+const pushById = computed(() => {
+  const fresh = pushState.data.value
+  if (fresh) return new Map(fresh.map((sub) => [sub.userId, sub]))
+  // Not answered yet: what an earlier visit learned, if anything.
+  const remembered: [string, NonNullable<ReturnType<typeof cachedSubscriber>>][] = []
+  for (const row of rows.value) {
+    const sub = cachedSubscriber(row.user_id)
+    if (sub) remembered.push([row.user_id, sub])
+  }
+  return new Map(remembered)
+})
+const pillById = computed(() => new Map([...pushById.value].map(([id, sub]) => [id, subscriberPill(sub)])))
+const pushNote = computed(() => {
+  const error = pushState.error.value
+  if (!error) return ''
+  return serviceProblem(error) ? 'Notifications are not connected on this database.' : 'Could not read notification state from OneSignal.'
+})
 const total = computed(() => users.data.value?.total ?? 0)
 /** Nothing has answered yet, so `total` is a placeholder rather than a count. */
 const countUnknown = computed(() => users.data.value === null)
@@ -85,13 +112,13 @@ function activityTone(lastActive: string): 'good' | 'idle' {
   <div class="page">
     <PageHeader
       title="Users"
-      description="Every profile on this database, with what it belongs to and what it has done. First seen and last active are derived rather than recorded: nothing logs a signup or a session."
+      description="Every profile on this database, and whether each person can be sent a notification. First seen and last active are derived rather than recorded: nothing logs a signup or a session."
       :fetched-at="users.fetchedAt.value"
       :busy="users.fetching.value"
       @refresh="users.refetch"
     />
 
-    <PanelCard title="Accounts" note="Open one to see its lists and what it has done." flush>
+    <PanelCard title="Accounts" :note="pushNote || 'Open one to see its lists and what it has done.'" flush>
       <div class="u-toolbar">
         <FilterBar
           v-model="query"
@@ -142,6 +169,25 @@ function activityTone(lastActive: string): 'good' | 'idle' {
           <UserId :id="String(row.user_id)" wraps>
             <CopyValue :value="String(row.user_id)" :display="shortUserId(String(row.user_id))" label="Clerk id" />
           </UserId>
+        </template>
+
+        <template #cell-push="{ row }">
+          <StatusPill
+            v-if="pillById.get(String(row.user_id))"
+            :tone="pillById.get(String(row.user_id))!.tone"
+            :label="pillById.get(String(row.user_id))!.label"
+            :title="pillById.get(String(row.user_id))!.title"
+          />
+          <span v-else class="u-muted" :title="pushNote" :aria-busy="pushState.fetching.value">{{ pushState.fetching.value ? '…' : '–' }}</span>
+        </template>
+
+        <template #cell-telemetry="{ row }">
+          <StatusPill v-if="replayById.has(String(row.user_id))" :tone="replayById.get(String(row.user_id)) ? 'good' : 'idle'" :label="replayById.get(String(row.user_id)) ? 'On' : 'Off'" />
+          <span v-else class="u-muted">{{ replayState.fetching.value ? '…' : '–' }}</span>
+        </template>
+
+        <template #cell-devices="{ row }">
+          <span class="u-truncate">{{ deviceSummary(pushById.get(String(row.user_id))?.devices ?? []) }}</span>
         </template>
 
         <template #cell-first_seen="{ row }">

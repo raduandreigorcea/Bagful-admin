@@ -75,11 +75,7 @@ const asUser = (row: unknown) => row as ClerkUser
     </PanelCard>
 
     <template v-else>
-      <PanelCard
-        :title="searching ? 'Search results' : 'Latest sign-ins'"
-        :note="searching ? 'Every Clerk account matching the search, newest sign-in first.' : 'The 25 accounts that signed in most recently.'"
-        flush
-      >
+      <PanelCard flush>
         <div class="u-toolbar">
           <FilterBar v-model="query" placeholder="Search by email or name" :busy="search.fetching.value" />
         </div>
@@ -110,7 +106,9 @@ const asUser = (row: unknown) => row as ClerkUser
             <span v-else class="u-muted">Never</span>
           </template>
           <template #cell-actions="{ row }">
-            <ClerkAccountActions :user="asUser(row)" @changed="refreshAll" />
+            <div class="clerk__actions">
+              <ClerkAccountActions :user="asUser(row)" @changed="refreshAll" />
+            </div>
           </template>
           <template #cell-createdAt="{ row }">
             <time v-if="asUser(row).createdAt" :title="formatDateTime(asUser(row).createdAt)">
@@ -124,6 +122,13 @@ const asUser = (row: unknown) => row as ClerkUser
 </template>
 
 <style scoped>
+/* Pushed to the end of the row, so the buttons line up with the right edge of
+   the card whatever the column widths do. */
+.clerk__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .clerk__who {
   display: flex;
   align-items: center;

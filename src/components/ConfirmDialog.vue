@@ -19,18 +19,30 @@ const props = defineProps({
   tone: { type: String as PropType<'primary' | 'danger'>, default: 'primary' },
   busy: { type: Boolean, default: false },
   error: { type: String, default: '' },
+  /** For a message with nothing to decide: only the confirm button, labelled OK. */
+  hideCancel: { type: Boolean, default: false },
+  /** Holds the confirm button back until what the dialog asks for is filled in. */
+  confirmDisabled: { type: Boolean, default: false },
+  /**
+   * A selector inside the panel to focus on open, for a dialog whose first act
+   * is typing. Without it focus lands on Cancel, which is right for a plain
+   * question and wrong for a search box.
+   */
+  focusSelector: { type: String, default: '' },
 })
 
 const emit = defineEmits<{ (e: 'confirm'): void; (e: 'cancel'): void }>()
 
 const panel = ref<HTMLElement | null>(null)
 const cancelButton = ref<HTMLButtonElement | null>(null)
+const confirmButton = ref<HTMLButtonElement | null>(null)
 
 useModal({
   open: () => props.open,
   close: () => emit('cancel'),
   panel,
-  initialFocus: () => cancelButton.value,
+  initialFocus: () =>
+    (props.focusSelector ? panel.value?.querySelector<HTMLElement>(props.focusSelector) : null) ?? cancelButton.value ?? confirmButton.value,
   // Escape is refused while the write is in flight, for the same reason the
   // scrim is: dismissing would not cancel the request, only hide whether it
   // worked.
@@ -59,6 +71,7 @@ useModal({
 
       <div class="confirm__actions">
         <button
+          v-if="!hideCancel"
           ref="cancelButton"
           type="button"
           class="confirm__btn confirm__btn--ghost"
@@ -66,10 +79,11 @@ useModal({
           @click="emit('cancel')"
         >Cancel</button>
         <button
+          ref="confirmButton"
           type="button"
           class="confirm__btn"
           :class="tone === 'danger' ? 'confirm__btn--danger' : 'confirm__btn--primary'"
-          :disabled="busy"
+          :disabled="busy || confirmDisabled"
           @click="emit('confirm')"
         >{{ busy ? 'Working…' : confirmLabel }}</button>
       </div>

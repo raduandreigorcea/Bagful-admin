@@ -6,25 +6,25 @@ import {
   banClerkUser,
   impersonateClerkUser,
   revokeClerkSessions,
-  sendTestPush,
   unbanClerkUser,
   type ClerkUser,
 } from '../lib/data/services'
 
 // What an admin can do to an account, wherever an account is shown.
 //
-// The same four buttons on the Clerk page's rows and on a person's own page, so
+// The same buttons on the Clerk page's rows and on a person's own page, so
 // there is one place that knows what each one asks, what it says before it runs
 // and what it says after. The destructive ones (ban, sign out everywhere) and the
-// risky one (impersonate) confirm first and name the person. So does a test
-// notification, because it lands on someone else's phone.
+// risky one (impersonate) confirm first and name the person.
 //
 // On your OWN account two are left out: ban (it locks you out) and impersonate
 // (it would sign you in as yourself). admin-services refuses both as well, but a
 // button that can only fail is a worse answer than no button. Signing yourself out
-// everywhere and a test notification to your own phone are allowed.
+// everywhere is allowed.
+//
+// A test notification is not here: it is a push check, so it lives on the OneSignal page.
 
-type Kind = 'ban' | 'unban' | 'sessions' | 'impersonate' | 'notify'
+type Kind = 'ban' | 'unban' | 'sessions' | 'impersonate'
 
 const props = defineProps({
   user: { type: Object as PropType<ClerkUser>, required: true },
@@ -58,12 +58,6 @@ const COPY: Record<Kind, { title: string; message: string; confirm: string; tone
     confirm: 'Sign out',
     tone: 'danger',
   },
-  notify: {
-    title: 'Send a test notification?',
-    message: 'Their phone gets a push notification that says it is a test. It does nothing else.',
-    confirm: 'Send',
-    tone: 'primary',
-  },
   impersonate: {
     title: 'Impersonate this account?',
     message:
@@ -95,15 +89,6 @@ async function run() {
       notice.value = {
         title: 'Signed out',
         message: revoked === 0 ? `${who.value} had no active sessions.` : `Ended ${revoked} active session${revoked === 1 ? '' : 's'}.`,
-      }
-    } else if (kind === 'notify') {
-      const { sent } = await sendTestPush(props.user.id, signal)
-      notice.value = {
-        title: sent ? 'Test notification sent' : 'Nobody to send to',
-        message:
-          sent
-            ? `A test notification went to ${who.value}.`
-            : `${who.value} has no phone subscribed to notifications on this project, so nothing was delivered.`,
       }
     } else {
       const { url } = await impersonateClerkUser(props.user.id, signal)
@@ -140,11 +125,18 @@ function closeNotice() {
 <template>
   <span class="actions">
     <button v-if="!isSelf" type="button" class="u-btn" @click="pending = 'impersonate'">Impersonate</button>
-    <button v-if="!isSelf" type="button" class="u-btn" @click="pending = user.banned ? 'unban' : 'ban'">
+    <button type="button" class="u-btn" @click="pending = 'sessions'">Sign out</button>
+    <!-- Last: the one that locks an account out. Red only to ban; lifting a ban
+         is putting things back, so it stays neutral. -->
+    <button
+      v-if="!isSelf"
+      type="button"
+      class="u-btn"
+      :class="{ 'u-btn--danger': !user.banned }"
+      @click="pending = user.banned ? 'unban' : 'ban'"
+    >
       {{ user.banned ? 'Lift ban' : 'Ban' }}
     </button>
-    <button type="button" class="u-btn" @click="pending = 'sessions'">Sign out</button>
-    <button type="button" class="u-btn" @click="pending = 'notify'">Test notification</button>
   </span>
 
   <ConfirmDialog
@@ -166,6 +158,7 @@ function closeNotice() {
     :title="notice?.title ?? ''"
     :message="notice?.message ?? ''"
     :confirm-label="notice?.link ? (copied ? 'Copied' : 'Copy link') : 'OK'"
+    :hide-cancel="!notice?.link"
     @confirm="notice?.link ? copyLink() : closeNotice()"
     @cancel="closeNotice"
   >
@@ -174,10 +167,12 @@ function closeNotice() {
 </template>
 
 <style scoped>
+/* One row that does not wrap: a ragged second line made the rows uneven. The
+   gap is wider than the buttons' own padding so each reads as separate. */
 .actions {
   display: inline-flex;
-  gap: var(--space-1-5);
-  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .actions__who {

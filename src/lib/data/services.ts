@@ -42,6 +42,25 @@ export interface SentryFeedback {
   url: string
 }
 
+/** One place a person's push notifications can land, as OneSignal knows it. */
+export interface PushDevice {
+  /** Android, iOS, Chrome, Firefox, Safari. */
+  kind: string
+  /** False means unsubscribed: uninstalled, data cleared, or notifications turned off. */
+  enabled: boolean
+  model: string | null
+  os: string | null
+  appVersion: string | null
+}
+
+export interface PushSubscriber {
+  userId: string
+  /** on: a device is subscribed. off: devices exist and none is. none: OneSignal has no device for them. */
+  state: 'on' | 'off' | 'none'
+  devices: PushDevice[]
+  lastActive: string | null
+}
+
 export interface PushNotification {
   id: string
   text: string
@@ -157,6 +176,39 @@ export function fetchSentryFeedback(signal: AbortSignal): Promise<SentryFeedback
   return ask({ service: 'sentry', view: 'feedback' }, signal)
 }
 
+// The last answer for each person, kept in this browser. The answer takes a
+// second request after the list of users, so a page already seen shows what it
+// knew at once, even after a reload, and corrects it when the new answer lands.
+const STORE = 'bagful-admin-subscribers'
+const lastSubscribers = new Map<string, PushSubscriber>()
+try {
+  for (const sub of JSON.parse(localStorage.getItem(STORE) ?? '[]') as PushSubscriber[]) lastSubscribers.set(sub.userId, sub)
+} catch {
+  // Storage blocked or garbled: start empty.
+}
+
+/** Whether each of these people (at most 50) recorded a session in the last 30 days, i.e. has Session replay on. */
+export function fetchReplayers(userIds: string[], signal: AbortSignal): Promise<{ userId: string; replay: boolean }[]> {
+  return ask({ service: 'posthog', view: 'replayers', userIds }, signal)
+}
+
+export function cachedSubscriber(userId: string): PushSubscriber | undefined {
+  return lastSubscribers.get(userId)
+}
+
+/** Whether each of these people (at most 50) can be pushed to. One answer per id, in any order. */
+export async function fetchPushSubscribers(userIds: string[], signal: AbortSignal): Promise<PushSubscriber[]> {
+  const answers = await ask<PushSubscriber[]>({ service: 'onesignal', view: 'subscribers', userIds }, signal)
+  for (const answer of answers) lastSubscribers.set(answer.userId, answer)
+  try {
+    // ponytail: newest 200 people; a bigger roster just warms less of the cache.
+    localStorage.setItem(STORE, JSON.stringify([...lastSubscribers.values()].slice(-200)))
+  } catch {
+    // Full or blocked: the in-memory copy still works.
+  }
+  return answers
+}
+
 export function fetchPushNotifications(signal: AbortSignal): Promise<PushNotification[]> {
   return ask({ service: 'onesignal', view: 'notifications' }, signal)
 }
@@ -198,6 +250,112 @@ export function pushTotals(rows: PushNotification[]) {
     }),
     { delivered: 0, unsubscribed: 0, errored: 0 },
   )
+}
+
+/** A person's notification state as a pill. Null while there is nothing to say yet. */
+export function subscriberPill(
+  sub: PushSubscriber | undefined,
+): { tone: 'good' | 'warn' | 'idle'; label: string; title: string } | null {
+  if (!sub) return null
+  if (sub.state === 'on') {
+    const on = sub.devices.filter((d) => d.enabled).length
+    return { tone: 'good', label: 'On', title: `${on} subscribed device${on === 1 ? '' : 's'}.` }
+  }
+  if (sub.state === 'off') {
+    return {
+      tone: 'warn',
+      label: 'Off',
+      title: 'Has a device, but it is unsubscribed: the app was uninstalled, its data cleared, or notifications turned off. OneSignal does not say which.',
+    }
+  }
+  return {
+    tone: 'idle',
+    label: 'No device',
+    title: 'OneSignal has no phone or browser for this person. The app only signs a device in when someone turns notifications on.',
+  }
+}
+
+/** "Android · Pixel 8", one per device, for the Devices column. */
+export function deviceLabel(device: PushDevice): string {
+  return device.model ? `${device.kind} · ${device.model}` : device.kind
+}
+
+/**
+ * The Devices cell: "Android · Pixel 7 ×19, Android · moto g(60)s".
+ *
+ * OneSignal opens a new subscription on every reinstall and keeps the old ones,
+ * so one phone can be twenty rows. Equal devices are counted instead of listed,
+ * and when anything is subscribed only the subscribed ones are shown: the dead
+ * ones are history, not where a push would go.
+ */
+export function deviceSummary(devices: PushDevice[]): string {
+  const live = devices.filter((d) => d.enabled)
+  const shown = live.length ? live : devices
+  const counts = new Map<string, number>()
+  for (const device of shown) counts.set(deviceLabel(device), (counts.get(deviceLabel(device)) ?? 0) + 1)
+  return [...counts].map(([label, n]) => (n > 1 ? `${label} ×${n}` : label)).join(', ')
+}
+
+export type PushKind = 'added' | 'bought' | 'test'
+
+/**
+ * What a notification is about, read from its English text.
+ *
+ * OneSignal keeps no "kind" for a push, and the English line is the one every
+ * notification carries (push.ts sends all six languages): "<who> added <item>",
+ * "<who> bought <list>", and the admin dashboard's own test. The earliest of
+ * " added " and " bought " wins, so a person or product whose name contains the
+ * other word does not flip it.
+ * ponytail: breaks if push.ts rewords the English line; tag the push with a
+ * `data.kind` in push-on-item-insert and read that instead.
+ */
+export function pushKind(text: string): PushKind | null {
+  if (text.startsWith('Test notification sent from')) return 'test'
+  const added = text.indexOf(' added ')
+  const bought = text.indexOf(' bought ')
+  if (added === -1 && bought === -1) return null
+  if (bought === -1 || (added !== -1 && added < bought)) return 'added'
+  return 'bought'
+}
+
+export interface PushState {
+  tone: 'good' | 'warn' | 'bad' | 'idle' | 'live'
+  label: string
+  /** What the pill means, for the hover. */
+  title: string
+}
+
+/**
+ * How one notification's delivery went, as pills.
+ *
+ * The counts are OneSignal's, per DEVICE (a phone, a browser), not per person:
+ * `successful` is a push handed to Google or Apple for a device, `failed` is a
+ * device OneSignal knows is unsubscribed, `errored` is a device that hit an
+ * error. A person with two devices counts twice. Unsubscribed is not a fault and
+ * is not an error: the app was uninstalled, its data cleared, or notifications
+ * switched off, and OneSignal does not say which.
+ *
+ * A notification can be wrong in more than one way, so this is a list.
+ */
+export function pushStates(row: PushNotification): PushState[] {
+  if (row.canceled) return [{ tone: 'idle', label: 'Canceled', title: 'Canceled before it finished sending.' }]
+  if (row.remaining > 0) return [{ tone: 'live', label: 'Sending', title: `Still queued for ${row.remaining} devices.` }]
+  const states: PushState[] = []
+  if (row.delivered > 0) {
+    states.push({ tone: 'good', label: 'Delivered', title: 'Handed to Google or Apple for at least one device. That is as far as OneSignal can see.' })
+  }
+  if (row.unsubscribed > 0) {
+    states.push({
+      tone: 'warn',
+      label: `${row.unsubscribed} unsubscribed`,
+      title: 'Devices OneSignal knows are unsubscribed: the app was uninstalled, its data cleared, or notifications turned off. Not an error, and it cannot say which.',
+    })
+  }
+  if (row.errored > 0) {
+    states.push({ tone: 'bad', label: `${row.errored} failed`, title: 'Devices where delivery hit an error.' })
+  }
+  if (!states.length) states.push({ tone: 'idle', label: 'No devices', title: 'Nobody was subscribed to receive it.' })
+  return states
 }
 
 // ─── things the dashboard can do ─────────────────────────────────────────────
