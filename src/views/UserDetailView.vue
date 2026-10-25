@@ -20,7 +20,7 @@ import { fetchUserDetail } from '../lib/data/users'
 import { banEverywhere, banState, liftEverywhere } from '../lib/banAccount'
 import ClerkAccountActions from '../components/ClerkAccountActions.vue'
 import MethodBadges from '../components/MethodBadges.vue'
-import { fetchClerkUser, serviceProblem } from '../lib/data/services'
+import { deleteClerkUser, fetchClerkUser, serviceProblem } from '../lib/data/services'
 import { formatCount, formatDateTime, formatRelative, humanizeKind } from '../lib/format'
 
 const route = useRoute()
@@ -76,6 +76,26 @@ async function confirmBan() {
     banError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
     banBusy.value = false
+  }
+}
+
+// Delete account: the Clerk user and everything of theirs in Bagful, in one request.
+const confirmingDelete = ref(false)
+const deleteBusy = ref(false)
+const deleteError = ref('')
+
+async function confirmDelete() {
+  if (deleteBusy.value) return
+  deleteBusy.value = true
+  deleteError.value = ''
+  try {
+    await deleteClerkUser(userId.value, new AbortController().signal)
+    confirmingDelete.value = false
+    await router.replace('/users')
+  } catch (caught) {
+    deleteError.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    deleteBusy.value = false
   }
 }
 
@@ -149,6 +169,7 @@ const membershipNote = computed(() => {
           >
             {{ anyBanned ? 'Lift ban' : 'Ban' }}
           </button>
+          <button type="button" class="u-btn u-btn--danger" @click="confirmingDelete = true">Delete account</button>
         </template>
       </PageHeader>
 
@@ -417,6 +438,18 @@ const membershipNote = computed(() => {
         placeholder="Why? This goes into the audit trail."
       />
     </ConfirmDialog>
+
+    <ConfirmDialog
+      :open="confirmingDelete"
+      :title="`Delete ${profile?.display_name ?? 'this account'}?`"
+      message="Deletes the account in Clerk and removes everything of theirs in Bagful: the lists they own (with every item and every member), their memberships and their profile. Lists they are only a member of stay. This cannot be undone."
+      confirm-label="Delete account"
+      tone="danger"
+      :busy="deleteBusy"
+      :error="deleteError"
+      @confirm="confirmDelete"
+      @cancel="confirmingDelete = false"
+    />
   </div>
 </template>
 

@@ -1,6 +1,8 @@
 <script setup lang="ts" generic="T extends object">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Column } from '../lib/uiTypes'
+import { downloadCsv, toCsv } from '../lib/csv'
+import { formatCount } from '../lib/format'
 import StateBlock from './StateBlock.vue'
 import AppIcon from './AppIcon.vue'
 
@@ -46,6 +48,16 @@ const props = withDefaults(
     /** Rows respond to click and look it. */
     clickable?: boolean
     selectedKey?: string | number | null
+    /**
+     * Shows an Export CSV button under the table and names the file. Off by
+     * default: a three-row table has nothing worth exporting.
+     */
+    exportName?: string
+    /**
+     * Fetches every row the current filter matches, for the export. Without it
+     * the button exports the rows on screen, which on a paginated table is 25.
+     */
+    exportAll?: () => Promise<{ rows: T[]; total: number }>
   }>(),
   {
     rows: () => [],
@@ -57,6 +69,8 @@ const props = withDefaults(
     emptyMessage: '',
     clickable: false,
     selectedKey: null,
+    exportName: '',
+    exportAll: undefined,
   },
 )
 
@@ -179,6 +193,41 @@ const floors = computed(() => ({
 function cellValue(row: T, key: string): unknown {
   return (row as Record<string, unknown>)[key]
 }
+
+// ─── export ──────────────────────────────────────────────────────────────────
+//
+// What goes in the file is what the table has columns for, with the raw field
+// rather than the rendered cell (an ISO date, not "3 days ago"). A column with
+// no label is a button column, and one whose key no row carries is slot-only
+// (a pill, a device list): neither has a value to write.
+const exporting = ref(false)
+const exportNote = ref('')
+
+async function exportCsv() {
+  if (exporting.value) return
+  exporting.value = true
+  exportNote.value = ''
+  try {
+    const { rows: all, total } = props.exportAll
+      ? await props.exportAll()
+      : { rows: props.rows, total: props.rows.length }
+    const cols = props.columns.filter(
+      (c) => c.label && (c.cell || all.some((r) => c.key in (r as Record<string, unknown>))),
+    )
+    const csv = toCsv(
+      cols.map((c) => c.label),
+      all.map((r) => cols.map((c) => (c.cell ? c.cell(r) : cellValue(r, c.key)))),
+    )
+    downloadCsv(`${props.exportName}-${new Date().toISOString().slice(0, 10)}.csv`, csv)
+    if (all.length < total) {
+      exportNote.value = `Exported the first ${formatCount(all.length)} of ${formatCount(total)}.`
+    }
+  } catch (err) {
+    exportNote.value = err instanceof Error ? err.message : 'The export failed.'
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <template>
@@ -210,7 +259,11 @@ function cellValue(row: T, key: string): unknown {
                   :size="12"
                 />
               </button>
-              <span v-else :title="column.title">{{ column.label }}</span>
+              <!-- A header slot is for the one header that is not a word: the
+                   select-all box over a column of checkboxes. -->
+              <slot v-else :name="`head-${column.key}`">
+                <span :title="column.title">{{ column.label }}</span>
+              </slot>
             </th>
           </tr>
         </thead>
@@ -274,6 +327,19 @@ function cellValue(row: T, key: string): unknown {
       </table>
     </div>
 
+    <div v-if="exportName && rows.length && !error" class="table-export">
+      <span v-if="exportNote" class="table-export__note" role="status">{{ exportNote }}</span>
+      <button
+        type="button"
+        class="u-btn"
+        :disabled="exporting"
+        :title="exportAll ? 'Every row this filter matches, up to 5,000' : 'The rows on this page'"
+        @click="exportCsv"
+      >
+        {{ exporting ? 'Exporting…' : 'Export CSV' }}
+      </button>
+    </div>
+
     <StateBlock
       v-if="error"
       state="error"
@@ -301,6 +367,20 @@ function cellValue(row: T, key: string): unknown {
 .table-scroll {
   overflow-x: auto;
   min-width: 0;
+}
+
+.table-export {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-top: var(--border-width-thin) solid var(--border-light);
+}
+
+.table-export__note {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 /* The floor, computed per table in the script above and delivered as three

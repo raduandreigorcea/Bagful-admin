@@ -16,6 +16,8 @@ import AppIcon from '../components/AppIcon.vue'
 import { useQuery, describeError } from '../lib/useQuery'
 import {
   fetchContributedProducts,
+  fetchCatalogMisses,
+  MISSES_LIMIT,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -23,7 +25,10 @@ import {
   type ProductDraft,
 } from '../lib/data/contributed'
 import { formatCount, formatDateTime, formatRelative } from '../lib/format'
-import type { LocalProductRow } from '../lib/data/types'
+import { collectPages } from '../lib/csv'
+import { removeEach } from '../lib/bulkRemove'
+import { useRowSelection } from '../lib/useRowSelection'
+import type { CatalogMissRow, LocalProductRow } from '../lib/data/types'
 import type { Column } from '../lib/uiTypes'
 
 // What lists typed for themselves, and what got promoted out of it.
@@ -43,7 +48,10 @@ import type { Column } from '../lib/uiTypes'
 const LIMIT = 25
 
 const query = ref('')
-const scope = ref<ContributedScope>('all')
+// 'misses' is a fourth tab rather than a fourth scope: it reads a different RPC
+// with no paging, search or sort, so it never reaches fetchContributedProducts.
+const scope = ref<ContributedScope | 'misses'>('all')
+const onMisses = computed(() => scope.value === 'misses')
 const offset = ref(0)
 
 // The one rule useTableState would have given us: any filter change returns to
@@ -55,11 +63,35 @@ watch([query, scope], () => {
 const products = useQuery(
   (signal) =>
     fetchContributedProducts(
-      { query: query.value, limit: LIMIT, offset: offset.value, scope: scope.value },
+      {
+        query: query.value,
+        limit: LIMIT,
+        offset: offset.value,
+        scope: scope.value as ContributedScope,
+      },
       signal,
     ),
-  { watch: [query, scope, offset] },
+  { watch: [query, scope, offset], enabled: () => !onMisses.value },
 )
+
+const misses = useQuery((signal) => fetchCatalogMisses(signal), { enabled: () => onMisses.value })
+// The RPC takes a limit and nothing else, so the search is done here on the rows
+// already loaded: it narrows the top 100, it does not look beyond them.
+const missQuery = ref('')
+const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+const missRows = computed(() => {
+  const needle = fold(missQuery.value.trim())
+  return (
+    (misses.data.value ?? [])
+      // admin_catalog_misses has no id, and a name is not unique across makers.
+      .map((row, i) => ({ ...row, key: String(i) }))
+      .filter((row) => !needle || fold(`${row.name} ${row.maker ?? ''}`).includes(needle))
+  )
+})
+const missError = computed(() => (misses.error.value ? describeError(misses.error.value).detail : ''))
+
+/** Whichever tab is showing, for the header's refresh and busy light. */
+const active = computed(() => (onMisses.value ? misses : products))
 
 const rows = computed(() => products.data.value?.rows ?? [])
 const total = computed(() => products.data.value?.total ?? 0)
@@ -68,11 +100,12 @@ const countUnknown = computed(() => products.data.value === null)
 const error = computed(() => (products.error.value ? describeError(products.error.value).detail : ''))
 
 const columns: Column<LocalProductRow>[] = [
-  { key: 'name', label: 'Product', width: '21%' },
-  { key: 'maker', label: 'Brand', width: '10%' },
+  { key: 'select', label: '', width: '4%', minPx: 36 },
+  { key: 'name', label: 'Product', width: '19%' },
+  { key: 'maker', label: 'Brand', width: '9%' },
   { key: 'barcode', label: 'Barcode / GTIN', width: '11%', hideBelow: 1100 },
   { key: 'scope', label: 'Scope', width: '9%' },
-  { key: 'list_name', label: 'List', width: '10%' },
+  { key: 'list_name', label: 'List', width: '9%' },
   { key: 'contributor_name', label: 'Contributed by', width: '10%', hideBelow: 1400 },
   { key: 'add_count', label: 'Adds', numeric: true, width: '6%' },
   { key: 'created_at', label: 'Added', width: '8%', hideBelow: 1100 },
@@ -85,6 +118,47 @@ const columns: Column<LocalProductRow>[] = [
   // come off the columns that could best afford one each.
   { key: 'actions', label: '', width: '15%', align: 'right', minPx: 80 },
 ]
+
+const missColumns: Column<CatalogMissRow & { key: string }>[] = [
+  { key: 'name', label: 'Product', width: '30%' },
+  { key: 'maker', label: 'Brand', width: '16%' },
+  { key: 'lists', label: 'Lists', numeric: true, width: '9%', title: 'Distinct lists or accounts that typed it. Three promotes it.' },
+  { key: 'add_count', label: 'Adds', numeric: true, width: '9%' },
+  { key: 'first_seen', label: 'First asked', width: '12%', hideBelow: 1100 },
+  { key: 'last_seen', label: 'Last asked', width: '12%' },
+  { key: 'promoted', label: 'Status', width: '12%' },
+]
+
+// ─── export ──────────────────────────────────────────────────────────────────
+const exportAll = () =>
+  collectPages((offset, limit) =>
+    fetchContributedProducts(
+      { query: query.value, limit, offset, scope: scope.value as ContributedScope },
+      new AbortController().signal,
+    ),
+  )
+
+// ─── selecting ───────────────────────────────────────────────────────────────
+// Page-wide only. Selecting "everything that matches" would mean removing rows
+// the person has never seen.
+const selection = useRowSelection(rows, (r) => r.id, [query, scope, offset])
+const removingMany = ref(false)
+
+async function confirmRemoveMany() {
+  const batch = selection.selected.value
+  writing.value = true
+  writeError.value = ''
+  const signal = new AbortController().signal
+  const { done, failed } = await removeEach(batch, (row) => deleteProduct(row.id, signal))
+  await products.refetch()
+  writing.value = false
+  if (failed.length === 0) {
+    removingMany.value = false
+    return
+  }
+  // Keep the dialog open on what is left, so the person sees what did not go.
+  writeError.value = `Removed ${done} of ${batch.length}. ${failed[0]!.message}`
+}
 
 // ─── writing ─────────────────────────────────────────────────────────────────
 // One busy flag and one error string for all three writes, because only one can
@@ -178,6 +252,12 @@ const SEGMENTS = [
     title:
       'Global rows, visible to everyone. The scoped rows they were collapsed from no longer exist.',
   },
+  {
+    value: 'misses',
+    label: 'Misses',
+    title:
+      'What people searched for, did not find, and typed in themselves: the most asked first. A list of what the catalog could stock, not a log of every empty search.',
+  },
 ]
 </script>
 
@@ -186,9 +266,9 @@ const SEGMENTS = [
     <PageHeader
       title="Contributed"
       description="Products a list added itself, and the ones enough lists asked for that everybody now sees them."
-      :fetched-at="products.fetchedAt.value"
-      :busy="products.fetching.value"
-      @refresh="products.refetch()"
+      :fetched-at="active.fetchedAt.value"
+      :busy="active.fetching.value"
+      @refresh="active.refetch()"
     >
       <template #tools>
         <button type="button" class="u-btn" @click="add">Add product</button>
@@ -201,9 +281,64 @@ const SEGMENTS = [
           :model-value="scope"
           :segments="SEGMENTS"
           aria-label="Which rows"
-          @update:model-value="scope = $event as ContributedScope"
+          @update:model-value="scope = $event as ContributedScope | 'misses'"
         />
       </template>
+
+      <template v-if="onMisses">
+        <div class="u-toolbar">
+          <FilterBar
+            v-model="missQuery"
+            :placeholder="`Filter the top ${MISSES_LIMIT} by name or brand`"
+            :busy="misses.fetching.value"
+          />
+        </div>
+
+        <DataTable
+          :columns="missColumns"
+          :rows="missRows"
+          row-key="key"
+          :loading="misses.loading.value"
+          :error="missError"
+          export-name="catalog-misses"
+          :empty-title="missQuery ? 'No match in the top ' + MISSES_LIMIT : 'Nothing typed in yet'"
+          empty-message="No list has added a product the catalog did not already have."
+        >
+          <template #cell-name="{ row }">
+            <span class="u-truncate product__name">{{ row.name }}</span>
+          </template>
+          <template #cell-maker="{ row }">
+            <span class="u-truncate" :class="{ 'u-muted': !row.maker }">{{ row.maker || '--' }}</span>
+          </template>
+          <template #cell-first_seen="{ row }">
+            <span :title="formatDateTime(row.first_seen)">{{ formatRelative(row.first_seen) }}</span>
+          </template>
+          <template #cell-last_seen="{ row }">
+            <span :title="formatDateTime(row.last_seen)">{{ formatRelative(row.last_seen) }}</span>
+          </template>
+          <template #cell-promoted="{ row }">
+            <StatusPill
+              :tone="row.promoted ? 'good' : 'warn'"
+              :label="row.promoted ? 'Closed' : 'Open'"
+              :dot="false"
+              :title="
+                row.promoted
+                  ? 'A global product already exists for this name'
+                  : 'No global product yet: still only visible to the lists that typed it'
+              "
+            />
+          </template>
+        </DataTable>
+      </template>
+
+      <template v-else>
+      <div v-if="selection.count.value" class="u-toolbar u-bulkbar">
+        <span class="u-num">{{ formatCount(selection.count.value) }} selected</span>
+        <button type="button" class="u-btn u-btn--danger" @click="writeError = '', removingMany = true">
+          Remove selected
+        </button>
+        <button type="button" class="u-btn" @click="selection.clear()">Clear</button>
+      </div>
 
       <div class="u-toolbar">
         <FilterBar
@@ -228,9 +363,27 @@ const SEGMENTS = [
         row-key="id"
         :loading="products.loading.value"
         :error="error"
+        export-name="contributed-products"
+        :export-all="exportAll"
         empty-title="No contributed products"
         empty-message="Nothing has been added through add_custom_product() on this database yet."
       >
+        <template #head-select>
+          <input
+            type="checkbox"
+            :checked="selection.all.value"
+            aria-label="Select every row on this page"
+            @change="selection.toggleAll()"
+          />
+        </template>
+        <template #cell-select="{ row }">
+          <input
+            type="checkbox"
+            :checked="selection.has(row)"
+            :aria-label="`Select ${row.name}`"
+            @change="selection.toggle(row)"
+          />
+        </template>
         <template #cell-name="{ row }">
           <span class="u-truncate product__name">{{ row.name }}</span>
         </template>
@@ -306,7 +459,9 @@ const SEGMENTS = [
         </template>
       </DataTable>
 
-      <template #footer>
+      </template>
+
+      <template v-if="!onMisses" #footer>
         <TablePager
           :total="total"
           :offset="offset"
@@ -324,6 +479,21 @@ const SEGMENTS = [
       :error="writeError"
       @submit="submitForm"
       @cancel="closeForm"
+    />
+
+    <!-- One question for the whole batch, and it says how many. Each row still
+         goes through admin_delete_product, so a half-failed batch reports
+         "Removed 3 of 5" and the dialog stays on what is left. -->
+    <ConfirmDialog
+      :open="removingMany"
+      :title="`Remove ${selection.count.value} products?`"
+      message="Each one is removed the same way a single Remove does it: list-scoped rows leave only that list's suggestions, global rows leave everyone's. Items already on any list are plain text and are untouched."
+      confirm-label="Remove"
+      tone="danger"
+      :busy="writing"
+      :error="writeError"
+      @confirm="confirmRemoveMany"
+      @cancel="writing || ((removingMany = false), (writeError = ''))"
     />
 
     <!-- Names the product rather than asking an abstract question, for the

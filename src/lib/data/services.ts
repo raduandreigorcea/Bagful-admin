@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { getAppSupabase } from '../supabase'
+import { fetchUsers } from './users'
 
 // Sentry, OneSignal, Clerk and PostHog, read through Bagful's admin-services
 // edge function.
@@ -192,6 +193,44 @@ export function fetchReplayers(userIds: string[], signal: AbortSignal): Promise<
   return ask({ service: 'posthog', view: 'replayers', userIds }, signal)
 }
 
+/** The app version each of these people (at most 50) last reported to PostHog; people it never heard from are left out. */
+export function fetchVersions(userIds: string[], signal: AbortSignal): Promise<{ userId: string; version: string }[]> {
+  return ask({ service: 'posthog', view: 'versions', userIds }, signal)
+}
+
+/** Every account on this database, 200 to a page: the RPC will not give more at once. */
+async function allAccountIds(signal: AbortSignal): Promise<Set<string>> {
+  const ids = new Set<string>()
+  for (let offset = 0; ; offset += 200) {
+    const { rows } = await fetchUsers({ limit: 200, offset }, signal)
+    for (const row of rows) ids.add(row.user_id)
+    if (rows.length < 200) return ids
+  }
+}
+
+/**
+ * How many accounts on this database last reported each app version to PostHog,
+ * most common first. PostHog knows ids with no account here (deleted people,
+ * bots), so its list is intersected with the profiles the database holds. An
+ * account PostHog never heard from in 30 days counts under a null version, so
+ * the slices add up to the number of accounts.
+ */
+export async function fetchVersionSpread(signal: AbortSignal): Promise<{ version: string | null; people: number }[]> {
+  const [people, accounts] = await Promise.all([
+    ask<{ userId: string; version: string }[]>({ service: 'posthog', view: 'version-spread' }, signal),
+    allAccountIds(signal),
+  ])
+  const counts = new Map<string | null, number>()
+  let seen = 0
+  for (const { userId, version } of people) {
+    if (!accounts.has(userId)) continue
+    seen++
+    counts.set(version, (counts.get(version) ?? 0) + 1)
+  }
+  if (accounts.size > seen) counts.set(null, accounts.size - seen)
+  return [...counts].map(([version, n]) => ({ version, people: n })).sort((a, b) => b.people - a.people)
+}
+
 export function cachedSubscriber(userId: string): PushSubscriber | undefined {
   return lastSubscribers.get(userId)
 }
@@ -292,25 +331,39 @@ export function deviceLabel(device: PushDevice): string {
 }
 
 /**
- * The Devices cell: "Android · Pixel 7 ×19, Android · moto g(60)s".
+ * OneSignal reports the APK's versionCode (80022), not its versionName. The code
+ * is major*1000000 + minor*10000 + patch (android/app/build.gradle), so 80022 is
+ * 0.8.22. Web subscriptions report nothing, and anything that is not a plain
+ * integer is shown as received.
+ */
+export function appVersionName(code: string): string {
+  if (!/^\d+$/.test(code)) return code
+  const n = Number(code)
+  return `${Math.floor(n / 1_000_000)}.${Math.floor((n % 1_000_000) / 10_000)}.${n % 10_000}`
+}
+
+/**
+ * The rows behind the Devices and Version cells: one per distinct device, newest
+ * app version first, versionless (web) ones last.
  *
  * OneSignal opens a new subscription on every reinstall and keeps the old ones,
  * so one phone can be twenty rows, most of them still marked enabled. Each device
- * is named once (the count is for the cell's tooltip, see subscriptionCount), and
- * when anything is subscribed only the subscribed ones are shown: the dead ones
- * are history, not where a push would go.
+ * is named once, with the newest version seen on it, and when anything is
+ * subscribed only the subscribed ones count: the dead ones are history, not
+ * where a push would go.
  */
-export function deviceSummary(devices: PushDevice[]): string {
+export function deviceRows(devices: PushDevice[]): { label: string; version: string }[] {
   const live = devices.filter((d) => d.enabled)
-  const shown = live.length ? live : devices
-  return [...new Set(shown.map(deviceLabel))].join(', ')
+  const newest = new Map<string, number>()
+  for (const d of live.length ? live : devices) {
+    const label = deviceLabel(d)
+    newest.set(label, Math.max(newest.get(label) ?? 0, Number(d.appVersion) || 0))
+  }
+  return [...newest]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, code]) => ({ label, version: code ? appVersionName(String(code)) : '' }))
 }
 
-/** How many OneSignal subscriptions sit behind a summary: reinstalls, not phones. */
-export function subscriptionCount(devices: PushDevice[]): number {
-  const live = devices.filter((d) => d.enabled)
-  return (live.length ? live : devices).length
-}
 
 export type PushKind = 'added' | 'bought' | 'test'
 
@@ -401,6 +454,14 @@ export function banClerkUser(userId: string, signal: AbortSignal, reason = ''): 
 
 export function unbanClerkUser(userId: string, signal: AbortSignal): Promise<ClerkUser> {
   return ask({ service: 'clerk', action: 'unban', userId }, signal)
+}
+
+/**
+ * Deletes the account everywhere: the Clerk user, the lists they own, their memberships
+ * and their profile. Lists they only sit in stay. Cannot be undone.
+ */
+export function deleteClerkUser(userId: string, signal: AbortSignal): Promise<{ deleted: true }> {
+  return ask({ service: 'clerk', action: 'delete', userId }, signal)
 }
 
 /** Signs the person out of every device. Returns how many sessions it ended. */

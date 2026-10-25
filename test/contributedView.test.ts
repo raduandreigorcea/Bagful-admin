@@ -14,12 +14,15 @@ import type { Component } from 'vue'
 // the first page, because page 4 of "all" is not page 4 of "promoted".
 
 const fetchContributedProducts = vi.fn()
+const fetchCatalogMisses = vi.fn()
 const createProduct = vi.fn().mockResolvedValue('new-id')
 const updateProduct = vi.fn().mockResolvedValue(undefined)
 const deleteProduct = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('../src/lib/data/contributed', () => ({
   fetchContributedProducts,
+  fetchCatalogMisses,
+  MISSES_LIMIT: 100,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -61,6 +64,7 @@ const stubs = {
     props: ['rows', 'rowKey', 'columns'],
     template: `<table><tbody>
       <tr v-for="r in rows" :key="r[rowKey]" class="row">
+        <td><slot name="cell-select" :row="r" /></td>
         <td><slot name="cell-name" :row="r" /></td>
         <td><slot name="cell-scope" :row="r" /></td>
         <td><slot name="cell-list_name" :row="r" /></td>
@@ -83,7 +87,7 @@ const stubs = {
   ConfirmDialog: {
     props: ['open', 'title', 'busy', 'error'],
     emits: ['confirm', 'cancel'],
-    template: `<div v-if="open" class="confirm">{{ title }}
+    template: `<div v-if="open" class="confirm">{{ title }}<em class="confirm__error">{{ error }}</em>
       <button class="confirm__go" @click="$emit('confirm')">go</button>
       <button class="confirm__no" @click="$emit('cancel')">no</button>
     </div>`,
@@ -139,6 +143,7 @@ describe('ContributedView', () => {
     // this a toHaveBeenCalledTimes(1) passes or fails on the order the tests
     // happen to run in, which is the shape of a test that is green by luck.
     fetchContributedProducts.mockReset()
+    fetchCatalogMisses.mockReset()
     createProduct.mockReset().mockResolvedValue('new-id')
     updateProduct.mockReset().mockResolvedValue(undefined)
     deleteProduct.mockReset().mockResolvedValue(undefined)
@@ -296,5 +301,94 @@ describe('ContributedView', () => {
 
     expect(wrapper.find('.form').exists()).toBe(true)
     expect(wrapper.find('.form__error').text()).toContain('already claims that barcode')
+  })
+
+  // The Misses tab reads a different RPC with no paging. It must not leave the
+  // products query running behind it, and it must not send 'misses' to
+  // admin_local_products as a scope, which the RPC would refuse.
+  it('reads the misses RPC on the Misses tab and not the products one', async () => {
+    fetchCatalogMisses.mockResolvedValue([
+      { name: 'Lapte Zuzu', maker: null, lists: 2, add_count: 5, first_seen: '2026-10-01T00:00:00Z', last_seen: '2026-10-20T00:00:00Z', promoted: false },
+      { name: 'Paine Panemar', maker: 'Panemar', lists: 1, add_count: 3, first_seen: '2026-10-02T00:00:00Z', last_seen: '2026-10-21T00:00:00Z', promoted: true },
+    ])
+    const wrapper = await mounted()
+    const productCalls = fetchContributedProducts.mock.calls.length
+
+    await wrapper.find('.seg__item[data-value="misses"]').trigger('click')
+    await flush()
+
+    expect(fetchCatalogMisses).toHaveBeenCalledTimes(1)
+    expect(fetchContributedProducts.mock.calls.length).toBe(productCalls)
+    expect(wrapper.findAll('.row')).toHaveLength(2)
+  })
+
+
+  it('filters the misses already loaded, ignoring case and diacritics', async () => {
+    fetchCatalogMisses.mockResolvedValue([
+      { name: 'Pâine Panemar', maker: null, lists: 2, add_count: 5, first_seen: '2026-10-01T00:00:00Z', last_seen: '2026-10-20T00:00:00Z', promoted: false },
+      { name: 'Lapte Zuzu', maker: 'Zuzu', lists: 1, add_count: 3, first_seen: '2026-10-02T00:00:00Z', last_seen: '2026-10-21T00:00:00Z', promoted: false },
+    ])
+    const wrapper = await mounted()
+    await wrapper.find('.seg__item[data-value="misses"]').trigger('click')
+    await flush()
+    expect(wrapper.findAll('.row')).toHaveLength(2)
+
+    await wrapper.findAll('.filter').at(-1)!.setValue('PAINE')
+
+    expect(wrapper.findAll('.row')).toHaveLength(1)
+    expect(fetchCatalogMisses).toHaveBeenCalledTimes(1)
+  })
+  describe('removing several at once', () => {
+    async function ticked() {
+      const wrapper = await mounted([row({ id: 'p-1' }), row({ id: 'p-2' }), row({ id: 'p-3' })])
+      const boxes = wrapper.findAll('input[type="checkbox"]')
+      await boxes[0].setValue(true)
+      await boxes[1].setValue(true)
+      return wrapper
+    }
+
+    it('offers the bar only once something is ticked', async () => {
+      const wrapper = await mounted([row()])
+      expect(wrapper.find('.u-bulkbar').exists()).toBe(false)
+
+      await wrapper.find('input[type="checkbox"]').setValue(true)
+
+      expect(wrapper.find('.u-bulkbar').text()).toContain('1 selected')
+    })
+
+    it('removes exactly the ticked rows after one confirmation', async () => {
+      const wrapper = await ticked()
+
+      await wrapper.find('.u-bulkbar .u-btn--danger').trigger('click')
+      expect(deleteProduct).not.toHaveBeenCalled()
+      await wrapper.find('.confirm__go').trigger('click')
+      await flush()
+
+      expect(deleteProduct.mock.calls.map((c) => c[0])).toEqual(['p-1', 'p-2'])
+      expect(wrapper.find('.confirm').exists()).toBe(false)
+    })
+
+    // Nothing stops at the first failure: the rows that can go should go, and
+    // the dialog stays open saying how many did not.
+    it('keeps going past a failure and reports how many were removed', async () => {
+      const wrapper = await ticked()
+      deleteProduct.mockRejectedValueOnce(new Error('Not allowed.'))
+
+      await wrapper.find('.u-bulkbar .u-btn--danger').trigger('click')
+      await wrapper.find('.confirm__go').trigger('click')
+      await flush()
+
+      expect(deleteProduct).toHaveBeenCalledTimes(2)
+      expect(wrapper.find('.confirm__error').text()).toContain('Removed 1 of 2')
+    })
+
+    it('forgets the ticks when the page changes', async () => {
+      const wrapper = await ticked()
+
+      await wrapper.find('.pager__next').trigger('click')
+      await flush()
+
+      expect(wrapper.find('.u-bulkbar').exists()).toBe(false)
+    })
   })
 })

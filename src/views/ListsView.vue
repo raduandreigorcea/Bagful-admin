@@ -13,6 +13,7 @@ import CopyValue from '../components/CopyValue.vue'
 import { useQuery, describeError } from '../lib/useQuery'
 import { useTableState } from '../lib/useTableState'
 import { fetchLists, isListSort } from '../lib/data/lists'
+import { collectPages } from '../lib/csv'
 import type { AdminListRow } from '../lib/data/types'
 import type { Column } from '../lib/uiTypes'
 import { formatCount, formatDateTime, formatRelative } from '../lib/format'
@@ -28,6 +29,11 @@ const { query, sort, dir, offset, limit, params, onSort } = useTableState({
 const lists = useQuery((signal) => fetchLists(params.value, signal), {
   watch: [params],
 })
+
+const exportAll = () =>
+  collectPages((offset, limit) =>
+    fetchLists({ ...params.value, offset, limit }, new AbortController().signal),
+  )
 
 const columns: Column<AdminListRow>[] = [
   { key: 'name', label: 'List', sortable: true, width: '23%' },
@@ -94,6 +100,8 @@ function activityTone(lastActive: string): 'good' | 'idle' {
         row-key="id"
         :sort="sort"
         :dir="dir"
+        export-name="lists"
+        :export-all="exportAll"
         :loading="lists.loading.value"
         :error="error"
         clickable

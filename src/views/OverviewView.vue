@@ -20,7 +20,7 @@ import {
   searchVolume,
 } from '../lib/data/overview'
 import { probeProjects } from '../lib/data/health'
-import { fetchPostHogActivity, recentCount } from '../lib/data/services'
+import { fetchPostHogActivity, fetchVersionSpread, recentCount } from '../lib/data/services'
 import { catalogConfigured, fetchCatalogStats } from '../lib/data/catalog'
 import { countryName } from '../lib/data/scrapers'
 import { DEFAULT_RANGE, TIME_RANGES, bucketLabel, resolveRange } from '../lib/timeRange'
@@ -76,6 +76,12 @@ const sparks = computed(() => ({
   actives: buckets.value.map((b) => b.active_users),
   joins: buckets.value.map((b) => b.members_joined),
 }))
+
+// Allowed to fail, like the searches: where PostHog is not connected the card says so.
+const versionSpread = useQuery((signal) => fetchVersionSpread(signal))
+const versionSlices = computed(() =>
+  (versionSpread.data.value ?? []).map((row) => ({ key: row.version ?? 'unknown', label: row.version ? `v${row.version}` : 'Not seen', value: row.people })),
+)
 
 const listSizes = computed(() =>
   (overview.data.value?.distribution.list_sizes ?? []).map((row) => ({
@@ -247,28 +253,43 @@ const overviewError = computed(() => describeError(overview.error.value))
 
       <div class="grid">
         <div class="span-3">
-          <PanelCard title="List sizes" note="How many lists have how many members." fill>
+          <PanelCard title="Lists and members" note="Members per list, then lists per account." fill>
             <StateBlock v-if="overview.loading.value" state="loading" :lines="4" />
             <StateBlock
-              v-else-if="!listSizes.length"
+              v-else-if="!listSizes.length && !membershipSpread.length"
               state="empty"
               title="No lists"
               message="Nothing to distribute yet."
             />
-            <BarChart v-else :bars="listSizes" :format="formatCount" dense />
+            <div v-else class="spreads">
+              <section v-if="listSizes.length">
+                <h3 class="spreads__title">Members per list</h3>
+                <BarChart :bars="listSizes" :format="formatCount" dense />
+              </section>
+              <section v-if="membershipSpread.length">
+                <h3 class="spreads__title">Lists per account</h3>
+                <BarChart :bars="membershipSpread" :format="formatCount" dense />
+              </section>
+            </div>
           </PanelCard>
         </div>
 
         <div class="span-3">
-          <PanelCard title="Membership spread" note="How many lists each account belongs to." fill>
-            <StateBlock v-if="overview.loading.value" state="loading" :lines="4" />
+          <PanelCard title="App versions" note="People by the version they last used, PostHog, past 30 days." fill>
+            <StateBlock v-if="versionSpread.loading.value" state="loading" :lines="4" />
             <StateBlock
-              v-else-if="!membershipSpread.length"
-              state="empty"
-              title="No accounts"
-              message="Nothing to distribute yet."
+              v-else-if="versionSpread.error.value"
+              state="error"
+              title="Could not load versions"
+              :message="versionSpread.error.value.message"
             />
-            <BarChart v-else :bars="membershipSpread" :format="formatCount" dense />
+            <StateBlock
+              v-else-if="!versionSlices.length"
+              state="empty"
+              title="No versions yet"
+              message="PostHog has not seen anyone in the past 30 days."
+            />
+            <PieChart v-else :bars="versionSlices" :format="formatCount" />
           </PanelCard>
         </div>
 
@@ -332,6 +353,18 @@ const overviewError = computed(() => describeError(overview.error.value))
 </template>
 
 <style scoped>
+.spreads {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.spreads__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+}
 
 /* A flex row, not a run of text with a chip dropped into it.
  *

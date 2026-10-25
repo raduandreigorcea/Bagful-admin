@@ -10,10 +10,12 @@ import FilterBar from '../components/FilterBar.vue'
 import StatusPill from '../components/StatusPill.vue'
 import CopyValue from '../components/CopyValue.vue'
 import UserId from '../components/UserId.vue'
+import DeviceCell from '../components/DeviceCell.vue'
 import { useQuery, describeError } from '../lib/useQuery'
 import { useTableState } from '../lib/useTableState'
 import { fetchUsers, isUserSort } from '../lib/data/users'
-import { cachedSubscriber, deviceSummary, subscriptionCount, fetchClerkSummary, fetchReplayers, fetchPushSubscribers, serviceProblem, subscriberPill } from '../lib/data/services'
+import { collectPages } from '../lib/csv'
+import { cachedSubscriber, fetchClerkSummary, fetchReplayers, fetchVersions, fetchPushSubscribers, serviceProblem, subscriberPill } from '../lib/data/services'
 import type { AdminUserRow } from '../lib/data/types'
 import type { Column } from '../lib/uiTypes'
 import { formatCount, formatDateTime, formatRelative, shortUserId } from '../lib/format'
@@ -44,15 +46,21 @@ const clerkTotal = useQuery((signal) =>
   fetchClerkSummary(signal).then((summary) => summary.total, () => null),
 )
 
+const exportAll = () =>
+  collectPages((offset, limit) =>
+    fetchUsers({ ...params.value, offset, limit }, new AbortController().signal),
+  )
+
 const columns: Column<AdminUserRow>[] = [
   // They sum to 100 because fixed layout scales the whole set down when they do
   // not, which once made a column overflow while claiming a share of a set that
   // added up to 105.
-  { key: 'display_name', label: 'Account', sortable: true, width: '22%' },
-  { key: 'user_id', label: 'Clerk id', width: '12%', hideBelow: 1400 },
+  { key: 'display_name', label: 'Account', sortable: true, width: '20%' },
+  { key: 'user_id', label: 'Clerk id', width: '10%', hideBelow: 1400 },
   { key: 'push', label: 'Notifications', width: '14%', title: 'From OneSignal: whether this person has a device subscribed to push.' },
-  { key: 'devices', label: 'Devices', width: '16%', hideBelow: 1100 },
-  { key: 'telemetry', label: 'Telemetry', width: '12%', hideBelow: 1100, title: 'From PostHog: On when this person recorded a session in the last 30 days (Session replay is on in their Settings). Off can also mean the app has not been opened since.' },
+  { key: 'devices', label: 'Devices', width: '14%', hideBelow: 1100 },
+  { key: 'version', label: 'Version', width: '8%', hideBelow: 1100, title: 'From OneSignal: the app version on their subscribed devices. Where there is none, the last version PostHog saw in the past 30 days.' },
+  { key: 'telemetry', label: 'Telemetry', width: '10%', hideBelow: 1100, title: 'From PostHog: On when this person recorded a session in the last 30 days (Session replay is on in their Settings). Off can also mean the app has not been opened since.' },
   { key: 'first_seen', label: 'First seen', sortable: true, width: '10%', hideBelow: 1100 },
   { key: 'last_active', label: 'Last active', sortable: true, width: '14%' },
 ]
@@ -72,6 +80,12 @@ const replayState = useQuery((signal) => fetchReplayers(rows.value.map((row) => 
   watch: [rows],
   enabled: () => rows.value.length > 0,
 })
+// And for the Version column where OneSignal has no device to read it from.
+const versionState = useQuery((signal) => fetchVersions(rows.value.map((row) => row.user_id), signal), {
+  watch: [rows],
+  enabled: () => rows.value.length > 0,
+})
+const versionById = computed(() => new Map((versionState.data.value ?? []).map((v) => [v.userId, v.version])))
 const replayById = computed(() => new Map((replayState.data.value ?? []).map((r) => [r.userId, r.replay])))
 const pushById = computed(() => {
   const fresh = pushState.data.value
@@ -141,6 +155,8 @@ function activityTone(lastActive: string): 'good' | 'idle' {
         row-key="user_id"
         :sort="sort"
         :dir="dir"
+        export-name="users"
+        :export-all="exportAll"
         :loading="users.loading.value"
         :error="error"
         clickable
@@ -194,7 +210,12 @@ function activityTone(lastActive: string): 'good' | 'idle' {
 
         <template #cell-devices="{ row }">
           <span v-if="pushState.fetching.value && !pushById.has(String(row.user_id))" class="u-skeleton users__bar users__bar--long" aria-busy="true" />
-          <span v-else class="u-truncate users__block" :title="`${subscriptionCount(pushById.get(String(row.user_id))?.devices ?? [])} subscriptions in OneSignal (each reinstall adds one)`">{{ deviceSummary(pushById.get(String(row.user_id))?.devices ?? []) || '–' }}</span>
+          <DeviceCell v-else :devices="pushById.get(String(row.user_id))?.devices ?? []" show="label" />
+        </template>
+
+        <template #cell-version="{ row }">
+          <span v-if="pushState.fetching.value && !pushById.has(String(row.user_id))" class="u-skeleton users__bar users__bar--short" aria-busy="true" />
+          <DeviceCell v-else :devices="pushById.get(String(row.user_id))?.devices ?? []" show="version" :fallback="versionById.get(String(row.user_id))" />
         </template>
 
         <template #cell-first_seen="{ row }">
@@ -234,11 +255,6 @@ function activityTone(lastActive: string): 'good' | 'idle' {
 
 .last {
   display: inline-flex;
-}
-
-/* A span is inline and cannot be clipped: without this a long device list ran under the next column. */
-.users__block {
-  display: block;
 }
 
 /* The size of the pill or text that replaces it, so nothing jumps when it lands. */

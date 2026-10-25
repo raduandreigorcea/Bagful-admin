@@ -25,6 +25,9 @@ import {
 } from '../lib/data/catalog'
 import { retailerLabel } from '../lib/catalogVocab'
 import { formatCount, formatDateTime, formatRelative } from '../lib/format'
+import { collectPages } from '../lib/csv'
+import { removeEach } from '../lib/bulkRemove'
+import { useRowSelection } from '../lib/useRowSelection'
 import type { Column } from '../lib/uiTypes'
 
 // The reference catalog. Everything the app can suggest that no list typed.
@@ -159,7 +162,8 @@ const error = computed(() => (products.error.value ? describeError(products.erro
 // and the wrapper picked up a few pixels of scroll. The three per cent comes off
 // Product, which had the most to spare.
 const columns: Column<CatalogProductRow>[] = [
-  { key: 'canonical_name', label: 'Product', width: '32%' },
+  { key: 'select', label: '', width: '3%', minPx: 36 },
+  { key: 'canonical_name', label: 'Product', width: '29%' },
   // Which shops carry it. This one column replaced Type, Record and Source at
   // once, because all three described a catalog of imported concepts: there is
   // no generic/commercial split any more, no completeness grade, and provenance
@@ -224,12 +228,59 @@ function nameTitle(row: CatalogProductRow): string {
   return bits.join(' · ')
 }
 
+// ─── export ──────────────────────────────────────────────────────────────────
+// Up to 5,000 of the matching rows. The catalog holds a hundred thousand, so the
+// button says when the file is a slice and the filters are how you narrow it.
+const exportAll = () =>
+  collectPages((offset, limit) =>
+    fetchCatalogProducts(
+      { ...filters.value, query: query.value, limit, offset },
+      new AbortController().signal,
+    ),
+  )
+
+// ─── selecting ───────────────────────────────────────────────────────────────
+// Page-wide only, and reset with the page, so what is ticked is always what is
+// on screen.
+const selection = useRowSelection(rows, (r) => r.id, [query, filters, offset])
+const removingMany = ref(false)
+
 // ─── writing ─────────────────────────────────────────────────────────────────
 const editing = ref<CatalogProductRow | null>(null)
 const formOpen = ref(false)
 const removing = ref<CatalogProductRow | null>(null)
 const writing = ref(false)
 const writeError = ref('')
+
+async function confirmRemoveMany() {
+  const batch = selection.selected.value
+  writing.value = true
+  writeError.value = ''
+  const signal = new AbortController().signal
+  const { done, failed } = await removeEach(batch, (row) => deleteCatalogProduct(row.id, signal))
+  await products.refetch()
+  writing.value = false
+  if (failed.length === 0) {
+    removingMany.value = false
+    return
+  }
+  // Stay open on what is left, so the person sees what did not go.
+  writeError.value = `Removed ${done} of ${batch.length}. ${failed[0]!.message}`
+}
+
+// The same blast radius as a single removal, said once for the batch with the
+// totals, because "25 products" does not tell you that 1,400 shop listings go
+// with them.
+const removalManyMessage = computed(() => {
+  const batch = selection.selected.value
+  const listings = batch.reduce((n, r) => n + r.listing_count, 0)
+  return (
+    'These are in the shared reference catalog, so they disappear for every list of production and development at once.' +
+    (listings > 0
+      ? ` ${formatCount(listings)} shop listings go with them. The next scrape recreates what it still finds.`
+      : '')
+  )
+})
 
 function add() {
   editing.value = null
@@ -334,6 +385,14 @@ const removalMessage = computed(() => {
     />
 
     <PanelCard v-else flush>
+      <div v-if="selection.count.value" class="u-toolbar u-bulkbar">
+        <span class="u-num">{{ formatCount(selection.count.value) }} selected</span>
+        <button type="button" class="u-btn u-btn--danger" @click="writeError = '', removingMany = true">
+          Remove selected
+        </button>
+        <button type="button" class="u-btn" @click="selection.clear()">Clear</button>
+      </div>
+
       <div class="u-toolbar">
         <FilterBar
           v-model="query"
@@ -387,9 +446,27 @@ const removalMessage = computed(() => {
         row-key="id"
         :loading="products.loading.value"
         :error="error"
+        export-name="catalog-products"
+        :export-all="exportAll"
         empty-title="No products"
         empty-message="Nothing in the reference catalog matches that."
       >
+        <template #head-select>
+          <input
+            type="checkbox"
+            :checked="selection.all.value"
+            aria-label="Select every row on this page"
+            @change="selection.toggleAll()"
+          />
+        </template>
+        <template #cell-select="{ row }">
+          <input
+            type="checkbox"
+            :checked="selection.has(row)"
+            :aria-label="`Select ${row.canonical_name}`"
+            @change="selection.toggle(row)"
+          />
+        </template>
         <!-- Name over brand, the way the app draws a product in its own
              suggestion list. The barcode sits with them rather than in the
              actions cell, because it identifies the product and does not act
@@ -501,6 +578,18 @@ const removalMessage = computed(() => {
       :error="writeError"
       @submit="submitForm"
       @cancel="closeForm"
+    />
+
+    <ConfirmDialog
+      :open="removingMany"
+      :title="`Remove ${selection.count.value} products?`"
+      :message="removalManyMessage"
+      confirm-label="Remove"
+      tone="danger"
+      :busy="writing"
+      :error="writeError"
+      @confirm="confirmRemoveMany"
+      @cancel="writing || ((removingMany = false), (writeError = ''))"
     />
 
     <ConfirmDialog
