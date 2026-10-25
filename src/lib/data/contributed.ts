@@ -1,6 +1,6 @@
 import { getAppSupabase } from '../supabase'
 import { queryError } from './errors'
-import type { LocalProductRow, Page, PageParams } from './types'
+import type { CatalogMissRow, LocalProductRow, Page, PageParams } from './types'
 
 // Products a list typed for itself, and the ones promoted out of them.
 //
@@ -121,4 +121,24 @@ export async function deleteProduct(id: string, signal: AbortSignal): Promise<vo
     .abortSignal(signal)
 
   if (error) queryError('admin_delete_product', error)
+}
+
+// ─── what people keep adding by hand ─────────────────────────────────────────
+//
+// Names grouped on their search key, most distinct lists first. This is the
+// shortest honest answer to "what should the catalog stock that it does not":
+// something somebody searched for, did not find, and cared enough to type in.
+// It is not a raw zero-result log and the page says so.
+//
+// The RPC takes a limit and nothing else: no offset, no search, no sort. So the
+// tab is a ranked top-N, not a table to page through.
+export const MISSES_LIMIT = 100
+
+export async function fetchCatalogMisses(signal: AbortSignal): Promise<CatalogMissRow[]> {
+  const { data, error } = await getAppSupabase()
+    .rpc('admin_catalog_misses', { p_limit: MISSES_LIMIT })
+    .abortSignal(signal)
+
+  if (error) queryError('admin_catalog_misses', error)
+  return (data ?? []) as CatalogMissRow[]
 }

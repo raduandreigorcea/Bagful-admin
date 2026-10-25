@@ -8,6 +8,11 @@ import { FunctionsHttpError } from '@supabase/supabase-js'
 // nobody deployed (deploy it), a non-admin (the same "Not authorised" screen as
 // every RPC), and anything else (an error with the vendor's own words).
 
+const accounts = vi.hoisted(() => ({ ids: [] as string[] }))
+vi.mock('../src/lib/data/users', () => ({
+  fetchUsers: async () => ({ rows: accounts.ids.map((user_id) => ({ user_id })), total: accounts.ids.length, offset: 0 }),
+}))
+
 const calls = vi.hoisted(() => ({ name: '', body: null as unknown }))
 const answer = vi.hoisted(() => ({ data: null as unknown, error: null as unknown }))
 
@@ -30,13 +35,14 @@ const {
   fetchSentryIssues,
   methodsLabel,
   deviceLabel,
-  deviceSummary,
-  subscriptionCount,
+  appVersionName,
+  deviceRows,
   pushKind,
   pushStates,
   subscriberPill,
   pushTotals,
   serviceProblem,
+  fetchVersionSpread,
 } = await import('../src/lib/data/services')
 const { describeError } = await import('../src/lib/useQuery')
 
@@ -121,19 +127,50 @@ describe('deviceLabel', () => {
   })
 })
 
-describe('deviceSummary', () => {
-  const pixel = { kind: 'Android', enabled: true, model: 'Pixel 7', os: null, appVersion: null }
+describe('appVersionName', () => {
+  it('turns the Android versionCode back into major.minor.patch', () => {
+    expect(appVersionName('80022')).toBe('0.8.22')
+    expect(appVersionName('1020345')).toBe('1.2.345')
+  })
+})
 
-  it('names each device once, however many reinstalls sit behind it', () => {
-    expect(deviceSummary([pixel, pixel, { ...pixel, model: 'moto g(60)s' }])).toBe('Android · Pixel 7, Android · moto g(60)s')
-    expect(subscriptionCount([pixel, pixel, { ...pixel, model: 'moto g(60)s' }])).toBe(3)
+describe('fetchVersionSpread', () => {
+  it('counts only accounts that exist here, and files the ones PostHog never saw under null', async () => {
+    accounts.ids = ['user_a', 'user_b', 'user_c', 'user_d']
+    answer.data = {
+      data: [
+        { userId: 'user_a', version: '0.8.19' },
+        { userId: 'user_b', version: '0.8.19' },
+        { userId: 'user_c', version: '0.7.34' },
+        { userId: 'user_gone', version: '0.8.0' },
+      ],
+    }
+    await expect(fetchVersionSpread(signal())).resolves.toEqual([
+      { version: '0.8.19', people: 2 },
+      { version: '0.7.34', people: 1 },
+      { version: null, people: 1 },
+    ])
+  })
+})
+
+describe('deviceRows', () => {
+  const pixel = { kind: 'Android', enabled: true, model: 'Pixel 7', os: null, appVersion: null as string | null }
+
+  it('names each device once with its newest version, newest app first, web last', () => {
+    const moto = { ...pixel, model: 'moto g(60)s', appVersion: '80030' }
+    const web = { kind: 'Chrome', enabled: true, model: null, os: null, appVersion: null }
+    expect(deviceRows([web, { ...pixel, appVersion: '80019' }, { ...pixel, appVersion: '80022' }, moto])).toEqual([
+      { label: 'Android · moto g(60)s', version: '0.8.30' },
+      { label: 'Android · Pixel 7', version: '0.8.22' },
+      { label: 'Chrome', version: '' },
+    ])
   })
 
   it('leaves out the unsubscribed ones while anything is subscribed, and shows them when nothing is', () => {
-    const dead = { ...pixel, model: 'Old phone', enabled: false }
-    expect(deviceSummary([dead, pixel])).toBe('Android · Pixel 7')
-    expect(deviceSummary([dead, dead])).toBe('Android · Old phone')
-    expect(deviceSummary([])).toBe('')
+    const dead = { ...pixel, model: 'Old phone', enabled: false, appVersion: '70001' }
+    expect(deviceRows([dead, pixel])).toEqual([{ label: 'Android · Pixel 7', version: '' }])
+    expect(deviceRows([dead, dead])).toEqual([{ label: 'Android · Old phone', version: '0.7.1' }])
+    expect(deviceRows([])).toEqual([])
   })
 })
 

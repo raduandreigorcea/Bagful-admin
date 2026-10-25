@@ -185,3 +185,52 @@ describe('the floor under the table', () => {
     expect(floors([{ key: 'name', label: 'Name' }]).full).toBe(0)
   })
 })
+
+// The Export CSV button writes the table's own columns, with raw values, and
+// leaves out the columns that hold no data (a button column has no label; a pill
+// column has no field on the row).
+describe('DataTable export', () => {
+  async function exported(extra: Record<string, unknown> = {}) {
+    let blob: Blob | undefined
+    URL.createObjectURL = ((b: Blob) => ((blob = b), 'blob:x')) as typeof URL.createObjectURL
+    URL.revokeObjectURL = () => {}
+    const wrapper = mount(Table, {
+      props: {
+        columns: [
+          { key: 'name', label: 'Name' },
+          { key: 'items', label: 'Items', numeric: true },
+          { key: 'pill', label: 'Status' },
+          { key: 'actions', label: '' },
+        ],
+        rows: [{ name: '=cmd', items: 3 }],
+        rowKey: 'name',
+        exportName: 'things',
+        ...extra,
+      },
+      global: { stubs },
+    })
+    await wrapper.find('.table-export button').trigger('click')
+    await new Promise((r) => setTimeout(r, 0))
+    return { wrapper, text: blob ? await blob.text() : undefined }
+  }
+
+  it('writes labelled columns that the rows carry, and defuses a formula', async () => {
+    const { text } = await exported()
+    expect(text).toBe("﻿Name,Items\r\n'=cmd,3")
+  })
+
+  it('has no button unless it was asked for one', () => {
+    const wrapper = mount(Table, {
+      props: { columns: [{ key: 'name', label: 'Name' }], rows: [{ name: 'a' }], rowKey: 'name' },
+      global: { stubs },
+    })
+    expect(wrapper.find('.table-export').exists()).toBe(false)
+  })
+
+  it('says so when the file is a slice of what matched', async () => {
+    const { wrapper } = await exported({
+      exportAll: async () => ({ rows: [{ name: 'a', items: 1 }], total: 9000 }),
+    })
+    expect(wrapper.find('.table-export__note').text()).toBe('Exported the first 1 of 9,000.')
+  })
+})

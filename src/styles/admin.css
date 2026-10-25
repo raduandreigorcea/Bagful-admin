@@ -727,3 +727,12 @@ a.u-truncate {
 @media (max-width: 700px) {
   .grid > [class*='span-'] { grid-column: span 12; }
 }
+
+/* The strip that appears over a table when rows are ticked: how many, and what
+ * can be done to all of them. Shared by Contributed and Catalog. */
+.u-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--admin-selected);
+}

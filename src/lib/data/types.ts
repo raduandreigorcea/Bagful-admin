@@ -218,3 +218,20 @@ export interface LocalProductRow {
   created_at: string
   total_count: number
 }
+
+/**
+ * One product people keep typing in by hand, from admin_catalog_misses().
+ *
+ * `lists` counts distinct contributors, the same number the promotion gate
+ * measures. `promoted` is true once a global row exists for the same key: the
+ * gap has closed and the row is history rather than a request.
+ */
+export interface CatalogMissRow {
+  name: string
+  maker: string | null
+  lists: number
+  add_count: number
+  first_seen: string
+  last_seen: string
+  promoted: boolean
+}
